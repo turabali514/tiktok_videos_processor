@@ -10,14 +10,19 @@ import db
 import download
 import transcribe
 import openai
-
+from create_vector_db import add_new_transcript,get_vector_store,get_vector_store
+from rag import RAGChainPipeline
 # Set OpenAI key
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
 app = FastAPI()
 client=openai.AsyncOpenAI()
 db.init_db()
+v_db= get_vector_store()
+rag= RAGChainPipeline()
+
+
 VIDEO_DIR = "videos"
+os.makedirs(VIDEO_DIR, exist_ok=True)
 app.mount("/videos", StaticFiles(directory=VIDEO_DIR), name="videos")
 # Global dictionary to track job progress
 video_jobs = {}
@@ -66,6 +71,7 @@ def import_worker(user_id, url):
             file_path,metadata = download.download_video(url)
             video_jobs[url] = "Transcribing"
             transcript = transcribe.transcribe_audio(file_path)
+            add_new_transcript(transcript)
             video_id = db.add_video_record(url, file_path, transcript,metadata)
             db.link_user_video(user_id, video_id)
             video_jobs[url] = "Completed"
@@ -76,6 +82,7 @@ def import_worker(user_id, url):
 def import_video(req: ImportRequest):
     if req.url in video_jobs and video_jobs[req.url] not in ["Failed", "Completed"]:
         return {"message": "Video already being imported."}
+    print (req.user_id,req.url)
     thread = threading.Thread(target=import_worker, args=(req.user_id, req.url))
     thread.start()
     return {"message": "Video import started"}
@@ -107,14 +114,14 @@ def query_video(req: QueryRequest):
     transcript = db.get_transcript(req.video_id)
     if not transcript:
         return {"answer": "Transcript not found."}
-    prompt = f"Transcript:\n{transcript}\n\nQuestion: {req.question}\nAnswer:"
+    
+    # Ensure the transcript is already stored during import_worker
+    # So we don't need to re-add it here
+
     try:
-        response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=256
-        )
-        return {"answer": response.choices[0].message.content}
+        print(req.question)
+        response = rag.ask(req.question)
+        return {"answer": response}
     except Exception as e:
         return {"answer": f"Error: {str(e)}"}
 

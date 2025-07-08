@@ -77,15 +77,17 @@ def add_user(email, password):
         # Username already exists
         user_id = None
     conn.close()
-    return user_id
+    return user_id["id"]
 
 def validate_user(email, password):
     """Check email/password. Returns user row or None."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, password))
+    cursor.execute("SELECT id FROM users WHERE email = ? AND password = ?", (email, password))
     user = cursor.fetchone()
     conn.close()
+    if user is None:
+        return None
     return user["id"]
 
 def get_video_by_url(url):
@@ -174,10 +176,6 @@ def get_transcript(video_id):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM videos")
     rows = cursor.fetchall()
-    print(f"\n--- All Videos in DB ({len(rows)} entries) ---")
-    for row in rows:
-        print(dict(row))
-    print("--- End of Videos ---\n")
     conn.close()
     """Return the transcript text for a given video."""
     print(f"Querying transcript for video_id: {video_id} (type: {type(video_id)})")
@@ -185,6 +183,5 @@ def get_transcript(video_id):
     cursor = conn.cursor()
     cursor.execute("SELECT transcript FROM videos WHERE id = ?", (video_id,))
     row = cursor.fetchone()
-    print(dict(row))
     conn.close()
     return row["transcript"] if row else ""

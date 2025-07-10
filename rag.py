@@ -9,7 +9,7 @@ import concurrent.futures
 
 # ✅ Shared setup
 store = get_vector_store()
-llm = ChatOpenAI(temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini",temperature=0.5)
 output_parser = StrOutputParser()
 
 # ✅ Prompt Template

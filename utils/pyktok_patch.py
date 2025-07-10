@@ -194,16 +194,25 @@ def fix_tt_url(tt_url):
     else:
         return tt_url
 '''
-def get_tiktok_json(video_url,browser_name=None):
+def get_tiktok_json(video_url,browser_name=None,proxies=None):
     if 'cookies' not in globals() and browser_name is None:
         raise BrowserNotSpecifiedError
     global cookies
     if browser_name is not None:
         cookies = getattr(browser_cookie3,browser_name)(domain_name='.tiktok.com')
+    headers_updated = {
+        "User-Agent": context_dict['user_agent'],
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.tiktok.com/",
+        "Connection": "keep-alive"
+    }
     tt = requests.get(video_url,
                       headers=headers,
                       cookies=cookies,
-                      timeout=20)
+                      timeout=20,
+                      proxies=proxies)
     # retain any new cookies that got set in this request
     cookies = tt.cookies
     soup = BeautifulSoup(tt.text, "html.parser")
@@ -214,16 +223,25 @@ def get_tiktok_json(video_url,browser_name=None):
         return
     return tt_json
 
-def alt_get_tiktok_json(video_url,browser_name=None):
+def alt_get_tiktok_json(video_url,browser_name=None,proxies=None):
     if 'cookies' not in globals() and browser_name is None:
         raise BrowserNotSpecifiedError
     global cookies
     if browser_name is not None:
         cookies = getattr(browser_cookie3,browser_name)(domain_name='.tiktok.com')
+    headers_updated = {
+        "User-Agent": context_dict['user_agent'],
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.tiktok.com/",
+        "Connection": "keep-alive"
+    }
     tt = requests.get(video_url,
                       headers=headers,
                       cookies=cookies,
-                      timeout=20)
+                      timeout=20,
+                      proxies=proxies)
     # retain any new cookies that got set in this request
     cookies = tt.cookies
     soup = BeautifulSoup(tt.text, "html.parser")
@@ -240,7 +258,8 @@ def save_tiktok(video_url,
                 metadata_fn='',
                 browser_name=None,
                 return_fns=False,
-                save_dir='.'):
+                save_dir='.',
+                proxies=None):
     if 'cookies' not in globals() and browser_name is None:
         raise BrowserNotSpecifiedError
     if save_video == False and metadata_fn == '':
@@ -250,11 +269,11 @@ def save_tiktok(video_url,
     # Ensure save_dir exists
     os.makedirs(save_dir, exist_ok=True)
 
-    tt_json = get_tiktok_json(video_url, browser_name)
+    tt_json = get_tiktok_json(video_url, browser_name,proxies=proxies)
     if tt_json is not None:
         video_id = list(tt_json['ItemModule'].keys())[0]
 
-        if save_video:
+        if save_video:  
             regex_url = re.findall(url_regex, video_url)[0]
             if 'imagePost' in tt_json['ItemModule'][video_id]:
                 slidecount = 1
@@ -262,7 +281,7 @@ def save_tiktok(video_url,
                     video_fn = os.path.join(save_dir, regex_url.replace('/', '_') + f'_slide_{slidecount}.jpeg')
                     tt_video_url = slide['imageURL']['urlList'][0]
                     headers['referer'] = 'https://www.tiktok.com/'
-                    tt_video = requests.get(tt_video_url, allow_redirects=True, headers=headers, cookies=cookies)
+                    tt_video = requests.get(tt_video_url, allow_redirects=True, headers=headers, cookies=cookies,proxies=proxies)
                     with open(video_fn, 'wb') as fn:
                         fn.write(tt_video.content)
                     slidecount += 1
@@ -274,7 +293,7 @@ def save_tiktok(video_url,
                 except:
                     tt_video_url = tt_json["__DEFAULT_SCOPE__"]['webapp.video-detail']['itemInfo']['itemStruct']['video']['downloadAddr']
                 headers['referer'] = 'https://www.tiktok.com/'
-                tt_video = requests.get(tt_video_url, allow_redirects=True, headers=headers, cookies=cookies)
+                tt_video = requests.get(tt_video_url, allow_redirects=True, headers=headers, cookies=cookies,proxies=proxies)
                 with open(video_fn, 'wb') as fn:
                     fn.write(tt_video.content)
                 print("Saved video\n", tt_video_url, "\nto\n", video_fn)
@@ -308,7 +327,7 @@ def save_tiktok(video_url,
             except:
                 tt_video_url = tt_json["__DEFAULT_SCOPE__"]['webapp.video-detail']['itemInfo']['itemStruct']['video']['downloadAddr']
             headers['referer'] = 'https://www.tiktok.com/'
-            tt_video = requests.get(tt_video_url, allow_redirects=True, headers=headers, cookies=cookies)
+            tt_video = requests.get(tt_video_url, allow_redirects=True, headers=headers, cookies=cookies,proxies=proxies)
             with open(video_fn, 'wb') as fn:
                 fn.write(tt_video.content)
             print("Saved video\n", video_url, "\nto\n", video_fn)
@@ -316,13 +335,13 @@ def save_tiktok(video_url,
         if metadata_fn != '':
             data_slot = tt_json["__DEFAULT_SCOPE__"]['webapp.video-detail']['itemInfo']['itemStruct']
             data_row = generate_data_row(data_slot)
-            try:
+            try:    
                 data_row.loc[0, "author_verified"] = tt_json["__DEFAULT_SCOPE__"]['webapp.video-detail']['itemInfo']['itemStruct']['author']
             except Exception:
                 pass
             metadata_fp = os.path.join(save_dir, metadata_fn)
             if os.path.exists(metadata_fp):
-                metadata = pd.read_csv(metadata_fn, keep_default_na=False)
+                metadata = pd.read_csv(metadata_fp, keep_default_na=False)
                 combined_data = pd.concat([metadata, data_row])
             else:
                 combined_data = data_row

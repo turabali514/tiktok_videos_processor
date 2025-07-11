@@ -1,10 +1,11 @@
 # db.py
 import sqlite3
-
+import os
 DB_PATH = "./db/tiktok_videos_processor.db"
 
 def get_db():
     """Connect to the SQLite database (creates file if it doesn't exist)."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
@@ -73,19 +74,23 @@ def add_user(email, password):
         cursor.execute("INSERT INTO users (email, password) VALUES (?, ?)", (email, password))
         conn.commit()
         user_id = cursor.lastrowid
-    except sqlite3.IntegrityError:
+    except sqlite3.IntegrityError as e:
         # Username already exists
+        print(e)
         user_id = None
     conn.close()
     return user_id
+
 
 def validate_user(email, password):
     """Check email/password. Returns user row or None."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, password))
+    cursor.execute("SELECT id FROM users WHERE email = ? AND password = ?", (email, password))
     user = cursor.fetchone()
     conn.close()
+    if user is None:
+        return None
     return user["id"]
 
 def get_video_by_url(url):
@@ -159,7 +164,8 @@ def get_videos_for_user(user_id):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-      SELECT v.id, v.url, v.file_path, v.transcript
+      SELECT v.id, v.url, v.file_path, v.transcript,v.video_playcount, v.video_diggcount,
+             v.video_commentcount, v.video_sharecount
       FROM videos v
       JOIN user_videos uv ON uv.video_id = v.id
       WHERE uv.user_id = ?
@@ -174,17 +180,11 @@ def get_transcript(video_id):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM videos")
     rows = cursor.fetchall()
-    print(f"\n--- All Videos in DB ({len(rows)} entries) ---")
-    for row in rows:
-        print(dict(row))
-    print("--- End of Videos ---\n")
     conn.close()
     """Return the transcript text for a given video."""
-    print(f"Querying transcript for video_id: {video_id} (type: {type(video_id)})")
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT transcript FROM videos WHERE id = ?", (video_id,))
     row = cursor.fetchone()
-    print(dict(row))
     conn.close()
     return row["transcript"] if row else ""

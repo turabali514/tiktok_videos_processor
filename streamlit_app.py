@@ -1,8 +1,35 @@
 import streamlit as st
 import requests
+from streamlit_autorefresh import st_autorefresh
 # --- Page Config ---
 st.set_page_config(page_title="TikTok Insights", layout="wide", page_icon="🎵")
+st.markdown("""
+    <style>
+    header.stAppHeader {
+        display: none;
+    }
+    .block-container {
+        padding-top: 0rem; /* Optional: reduce top padding to reclaim space */
+    }
+[data-testid="collapsedControl"] {
+        display: none !important;
+    }
 
+    /* Force the sidebar to stay open and fixed width */
+    section[data-testid="stSidebar"] {
+        width: 300px !important;
+        min-width: 300px !important;
+        max-width: 300px !important;
+        visibility: visible !important;
+        display: block !important;
+    }
+
+    /* Prevent layout from collapsing the sidebar */
+    .css-hxt7ib, .css-1lcbmhc {
+        flex-direction: row !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 # --- Session Setup ---
 default_session_state = {
     'user_id': None,
@@ -28,7 +55,7 @@ if (
     # Optional: prefetch videos if cache is empty
     if not st.session_state.video_data_cache:
         try:
-            videos_res = requests.get("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+            videos_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
             if videos_res.status_code == 200:
                 st.session_state.video_data_cache = videos_res.json()
         except Exception as e:
@@ -57,7 +84,19 @@ theme_css = {
     body, .stApp { 
         background: linear-gradient(135deg, #0f1117 0%, #1a1c25 100%); 
         color: #f1f1f1; 
+        section.main > div:first-child {
+        padding-top: 0rem !important;
+        margin-top: 0rem !important;}
     }
+    h1 {
+    font-size: 1.6rem !important;
+}
+h2 {
+    font-size: 1.4rem !important;
+}
+h3 {
+    font-size: 1.2rem !important;
+}
     h1, h2, h3 {
         background: linear-gradient(90deg, #ffcc70, #c850c0);
         -webkit-background-clip: text;
@@ -139,7 +178,20 @@ theme_css = {
     body, .stApp { 
         background: linear-gradient(135deg, #f4f7fb 0%, #ffffff 100%); 
         color: #333; 
+        section.main > div:first-child {
+            padding-top: 0rem !important;
+            margin-top: 0rem !important;
+        }
     }
+    h1 {
+    font-size: 1.6rem !important;
+}
+h2 {
+    font-size: 1.4rem !important;
+}
+h3 {
+    font-size: 1.2rem !important;
+}
     h1, h2, h3 {
         background: linear-gradient(90deg, #0072ff, #00c6ff);
         -webkit-background-clip: text;
@@ -222,21 +274,10 @@ st.markdown(theme_css[st.session_state.theme], unsafe_allow_html=True)
 
 # --- App Container ---
 st.markdown("""
-<div style="max-width: 1200px; margin: auto; padding: 20px;">
+<div style="max-width: 1200px; margin: 0px; padding: 0rem;">
 """, unsafe_allow_html=True)
-
-if st.session_state.user_id:
-    greeting = f"Welcome, {st.session_state.email.split('@')[0].capitalize()} 👋"
-    st.markdown(f"""
-    <div style="text-align: center; padding: 1rem; background: rgba(0,0,0,0.05); border-radius: 12px; ">
-        <h2 style="margin: 0;">{greeting}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
 # --- Routing ---
 page = st.query_params.get("page", "login")
-# if st.session_state.user_id:
-#     nav_bar()
 if st.query_params.get("page") == "login" and st.session_state.user_id:
     st.session_state.user_id = None
     st.session_state.email = None
@@ -283,13 +324,8 @@ if page == "login":
                     if res.status_code == 200 and 'user_id' in data:
                         st.session_state.user_id = data["user_id"]
                         st.session_state.email = email
-                        st.query_params.update({
-        "page": "dashboard",
-        "user_id": data["user_id"],
-        "email": email
-    })
                         try:
-                            videos_res = requests.get("http://127.0.0.1:8000/videos", params={"user_id": data["user_id"]})
+                            videos_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": data["user_id"]})
                             if videos_res.status_code == 200:
                                 st.session_state.video_data_cache = videos_res.json()
                         except Exception as e:
@@ -409,10 +445,11 @@ elif page == "signup":
 
 # --- Dashboard ---
 elif page == "dashboard":
+    if any(status != "Completed" for status in st.session_state.import_status.values()):
+        st_autorefresh(interval=5000, limit=100, key="import_status_autorefresh")
     st.markdown("""
-    <div style="text-align: center; padding: 20px 0;">
-        <h1 style="font-size: 2.5rem; margin-bottom: 20px;">📥 TikTok Video Insights</h1>
-        <p style="font-size: 1.2rem; margin-bottom: 30px;">Import and analyze your TikTok videos</p>
+    <div style="text-align: center; padding: 0px 0;">
+        <h1 style=" margin-bottom: 1px;">📥 TikTok Video Insights</h1>
     </div>
     """, unsafe_allow_html=True)
     
@@ -423,7 +460,7 @@ elif page == "dashboard":
     
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, {import_card_bg} 0%, {import_card_bg} 100%); 
-               padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+               padding: 2px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
                border-left: 4px solid {import_card_border}; border-right: 4px solid {import_card_border2}; 
                margin-bottom: 30px;">
         <h2 style="text-align: center; margin-bottom: 20px;">➕ Import a TikTok Video</h2>
@@ -456,7 +493,7 @@ elif page == "dashboard":
 
                 st.success(f"✅ {msg}")
                 try:
-                    videos_res = requests.get("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+                    videos_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
                     if videos_res.status_code == 200:
                         st.session_state.video_data_cache = videos_res.json()
                 except Exception as e:
@@ -470,24 +507,37 @@ elif page == "dashboard":
     # Progress section with better styling
     if st.session_state.import_status:
         st.markdown("""
-        <h2 style="text-align: center; margin: 30px 0 20px;">⏳ Import Progress</h2>
+        <h2 style="text-align: center;padding: 0px; margin: 0px 0 0px 0;">⏳ Import Progress</h2>
         """, unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns([1,1,1])
-        with col2:
-            refresh_btn = st.button("🔄 Refresh Status", use_container_width=True)
-        
-        if refresh_btn:
-            with st.spinner("Updating status..."):
-                try:
-                    res = requests.get("http://127.0.0.1:8000/progress")
-                    if res.status_code == 200:
-                        for url in list(st.session_state.import_status.keys()):
-                            if url in res.json():
-                                st.session_state.import_status[url] = res.json()[url]
-                except Exception as e:
-                    st.error(f"❌ Progress update error: {e}")
-        
+        with st.spinner("🔄 Updating import status..."):
+            try:
+                res = requests.post("http://127.0.0.1:8000/progress")
+                if res.status_code == 200:
+                    for url in list(st.session_state.import_status.keys()):
+                        if url in res.json():
+                            st.session_state.import_status[url] = res.json()[url]
+                just_completed = [
+    url for url in st.session_state.import_status
+    if st.session_state.import_status[url] == "Completed"
+    and url not in st.session_state.get("imported_video_urls", [])
+]               
+                if just_completed:
+    # Fetch latest video list
+                    try:
+                        video_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+                        if video_res.status_code == 200:
+                            st.session_state.video_data_cache = video_res.json()
+                            if "imported_video_urls" not in st.session_state:
+                                st.session_state.imported_video_urls = []
+                            st.session_state.imported_video_urls.extend(just_completed)
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not refresh video list after completion: {e}")
+            except Exception as e:
+                st.error(f"❌ Progress update error: {e}")
+        st.markdown(f"""
+<div style="max-height: 220px; overflow-y: auto; padding-right: 0px;">
+""", unsafe_allow_html=True)
         # Display each status in a nice card
         for url, status in st.session_state.import_status.items():
             progress_color = "#fc6076" if st.session_state.theme == "dark" else "#0072ff"
@@ -497,7 +547,7 @@ elif page == "dashboard":
                 progress_color = "#cb2d3e" if st.session_state.theme == "dark" else "#ff512f"
                 
             st.markdown(f"""
-            <div style="background: {import_card_bg}; padding: 15px; border-radius: 12px; 
+            <div style="background: {import_card_bg}; height: 60;padding: 0px; border-radius: 12px; 
                       border-left: 4px solid {progress_color}; margin-bottom: 10px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span>📽️ <code>{url[:50]}{"..." if len(url) > 50 else ""}</code></span>
@@ -505,7 +555,7 @@ elif page == "dashboard":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
+        st.markdown("</div>", unsafe_allow_html=True)
     st.divider()
 
     # Videos section with improved styling
@@ -516,7 +566,7 @@ elif page == "dashboard":
     try:
         with st.spinner("Loading your videos..."):
             if not st.session_state.video_data_cache:
-                res = requests.get("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+                res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
                 if res.status_code == 200:
                     st.session_state.video_data_cache = res.json()
                 else:
@@ -548,20 +598,20 @@ elif page == "dashboard":
                                         <div style="font-size: 1.2rem; font-weight: bold;">🔁</div>
                                         <div>{vid.get("video_sharecount", 0)}</div>
                                     </div>
+                                    <div class="text-align style="width: 100%; 
+                                                            border-radius: 8px; text-align: right;">
+                                        <a href="{vid["url"]}" target="_blank" style="font-weight: bold;">View Original</a>
+                                    </div>
                                 </div>
                                 """
 
                                 st.markdown(f"""
                                 <div class="video-bubble">
-                                    <video controls style="width: 100%; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
+                                    <video controls style="width: 100%; max-width: auto; height: 200px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
                                         <source src="{vid['file_path']}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
-                                    <div class="stats" style="margin: 12px 0; padding: 8px; width: 100%; 
-                                                            border-radius: 8px; text-align: center;">
-                                        <span style="font-weight: bold;">TikTok ID:</span> {vid["id"]} | 
-                                        <a href="{vid["url"]}" target="_blank" style="font-weight: bold;">View Original</a>
-                                    </div>
+                                    
                                     {stats_html}
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -581,11 +631,27 @@ elif page == "dashboard":
                                                         "question": question
                                                     })
                                                     if resp.status_code == 200:
-                                                        st.success("🤖 " + resp.json().get("answer", "No response"))
+                                                        answer = resp.json().get("answer", "No response")
+                                                        st.session_state[f"answer_{vid['id']}"] = answer
                                                     else:
                                                         st.warning("No answer returned.")
                                                 except Exception as e:
                                                     st.error(f"❌ Query error: {e}")
+
+                                    answer = st.session_state.get(f"answer_{vid['id']}")
+                                    if answer:
+                                        st.markdown(f"""
+                                        <div style="margin-top: 10px; max-height: 150px; overflow-y: auto; 
+                                                    padding: 10px; border-radius: 12px; 
+                                                    background: {'#1c1e26' if st.session_state.theme == 'dark' else '#f4f7fb'};
+                                                    border-left: 4px solid #0072ff; border-right: 4px solid #00c6ff;
+                                                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                                            <strong>🤖 Answer:</strong>
+                                            <div style="margin-top: 8px; color: {'#fff' if st.session_state.theme == 'dark' else '#000'};">
+                                                {answer}
+                                            </div>
+                                        </div>
+                                        """, unsafe_allow_html=True)
                                 with col2:
                                     if st.button("🔍 View Details", key=f"full_{vid['id']}", use_container_width=True):
                                         st.session_state.selected_video = vid["id"]
@@ -607,7 +673,7 @@ elif page == "video":
         st.rerun()
 
     try:
-        res = requests.get("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+        res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
         if res.status_code == 200:
             videos = res.json()
             video = next((v for v in videos if v['id'] == st.session_state.selected_video), None)
@@ -620,60 +686,79 @@ elif page == "video":
                 """, unsafe_allow_html=True)
                 
                 # Video player with stats
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    st.video(video["file_path"])
-                
-                with col2:
-                    # Create an attractive stats card
-                    card_bg = "#1c1e26" if st.session_state.theme == "dark" else "#ffffff"
-                    card_border = "#fc6076" if st.session_state.theme == "dark" else "#0072ff"
-                    card_border2 = "#ff9a44" if st.session_state.theme == "dark" else "#00c6ff"
-                    
-                    st.markdown(f"""
-                    <div style="background: linear-gradient(135deg, {card_bg} 0%, {card_bg} 100%); 
-                               padding: 20px; border-radius: 16px; height: 100%; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-                               border-left: 4px solid {card_border}; border-right: 4px solid {card_border2};">
-                        <h3 style="text-align: center; margin-bottom: 20px;">📊 Video Statistics</h3>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div style="text-align: center; padding: 15px; border-radius: 10px; 
-                                        background: {'rgba(28, 30, 38, 0.7)' if st.session_state.theme == 'dark' else 'rgba(244, 247, 251, 0.7)'};">
-                                <div style="font-size: 2rem;">👁️</div>
-                                <div style="font-size: 1.5rem; font-weight: bold;">{video.get("video_playcount", 0)}</div>
-                                <div>Views</div>
-                            </div>
-                            <div style="text-align: center; padding: 15px; border-radius: 10px; 
-                                        background: {'rgba(28, 30, 38, 0.7)' if st.session_state.theme == 'dark' else 'rgba(244, 247, 251, 0.7)'};">
-                                <div style="font-size: 2rem;">❤️</div>
-                                <div style="font-size: 1.5rem; font-weight: bold;">{video.get("video_diggcount", 0)}</div>
-                                <div>Likes</div>
-                            </div>
-                            <div style="text-align: center; padding: 15px; border-radius: 10px; 
-                                        background: {'rgba(28, 30, 38, 0.7)' if st.session_state.theme == 'dark' else 'rgba(244, 247, 251, 0.7)'};">
-                                <div style="font-size: 2rem;">💬</div>
-                                <div style="font-size: 2rem;">💬</div>
-                                <div style="font-size: 1.5rem; font-weight: bold;">{video.get("video_commentcount", 0)}</div>
-                                <div>Comments</div>
-                            </div>
-                            <div style="text-align: center; padding: 15px; border-radius: 10px; 
-                                        background: {'rgba(28, 30, 38, 0.7)' if st.session_state.theme == 'dark' else 'rgba(244, 247, 251, 0.7)'};">
-                                <div style="font-size: 2rem;">🔁</div>
-                                <div style="font-size: 1.5rem; font-weight: bold;">{video.get("video_sharecount", 0)}</div>
-                                <div>Shares</div>
-                            </div>
+                card_bg = "#1c1e26" if st.session_state.theme == "dark" else "#ffffff"
+                card_border = "#fc6076" if st.session_state.theme == "dark" else "#0072ff"
+                card_border2 = "#ff9a44" if st.session_state.theme == "dark" else "#00c6ff"
+
+                # Render video with intermediate height and responsive width
+                st.markdown(f"""
+                <div style="width: 100%; display: flex; justify-content: left; margin-bottom: 20px;">
+                    <video controls style="width: 100%; max-width: 720px; height: 400px; border-radius: 12px;
+                        box-shadow: 0 8px 20px rgba(0,0,0,0.2);">
+                        <source src="{video['file_path']}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Render stats block underneath
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, {card_bg} 0%, {card_bg} 100%); 
+                        padding: 10px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+                        border-left: 4px solid {card_border}; border-right: 4px solid {card_border2}; 
+                        max-width: 720px;">
+                    <h3 style="text-align: center; margin-bottom: 10px;">📊 Video Statistics</h3>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                        <div style="text-align: center; padding: 10px; border-radius: 8px; 
+                                    background: rgba(244, 247, 251, 0.7);">
+                            <div style="font-size: 1.5rem;">👁️</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;">{video.get("video_playcount", 0)}</div>
+                            <div>Views</div>
+                        </div>
+                        <div style="text-align: center; padding: 10px; border-radius: 8px; 
+                                    background: rgba(244, 247, 251, 0.7);">
+                            <div style="font-size: 1.5rem;">❤️</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;">{video.get("video_diggcount", 0)}</div>
+                            <div>Likes</div>
+                        </div>
+                        <div style="text-align: center; padding: 10px; border-radius: 8px; 
+                                    background: rgba(244, 247, 251, 0.7);">
+                            <div style="font-size: 1.5rem;">💬</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;">{video.get("video_commentcount", 0)}</div>
+                            <div>Comments</div>
+                        </div>
+                        <div style="text-align: center; padding: 10px; border-radius: 8px; 
+                                    background: rgba(244, 247, 251, 0.7);">
+                            <div style="font-size: 1.5rem;">🔁</div>
+                            <div style="font-size: 1.2rem; font-weight: bold;">{video.get("video_sharecount", 0)}</div>
+                            <div>Shares</div>
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
+                </div>
+                """, unsafe_allow_html=True)
 
                 st.divider()
-
+                st.markdown(f"""
+<div style="padding: 5px; border-radius: 16px;
+            background: {'#252836' if st.session_state.theme == 'dark' else '#f4f7fb'};
+            border-left: 4px solid {card_border}; border-right: 4px solid {card_border2};
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1); margin-top: 5px;
+            max-height: 200px; overflow-y: auto;">
+    <h3 style="text-align: left; margin-bottom: 10px;">🧠 Video Summary</h3>
+    <p style="line-height: 1.6; color: {'#f1f1f1' if st.session_state.theme == 'dark' else '#333'};">
+        {video.get("summary", "No summary available.")}
+    </p>
+</div>
+""", unsafe_allow_html=True)
+                st.divider()
                 # Transcript Display
                 st.markdown(f"""
-                <div style="padding: 20px; border-radius: 16px;
+                <div style="padding: 5px; border-radius: 16px;
                             background: {'#252836' if st.session_state.theme == 'dark' else '#f4f7fb'};
                             border-left: 4px solid {card_border}; border-right: 4px solid {card_border2};
-                            box-shadow: 0 8px 20px rgba(0,0,0,0.1); margin-top: 20px;">
-                    <h3 style="text-align: center; margin-bottom: 10px;">📝 Video Transcript</h3>
+                            box-shadow: 0 8px 20px rgba(0,0,0,0.1); margin-top: 5px;
+                            max-height: 200px; overflow-y: auto;">
+                    <h3 style="text-align: left; margin-bottom: 10px;">📝 Video Transcript</h3>
                     <p style="line-height: 1.6; color: {'#f1f1f1' if st.session_state.theme == 'dark' else '#333'};">
                         {video.get("transcript", "No transcript available.")}
                     </p>
@@ -684,15 +769,15 @@ elif page == "video":
 
                 # Ask about video section
                 st.markdown(f"""
-                <div style="padding: 20px; border-radius: 16px;
+                <div style="padding: 0px; border-radius: 16px;
                             background: {'#1c1e26' if st.session_state.theme == 'dark' else '#ffffff'};
                             border-left: 4px solid {card_border}; border-right: 4px solid {card_border2};
-                            box-shadow: 0 8px 20px rgba(0,0,0,0.1); margin-top: 20px;">
-                    <h3 style="text-align: center; margin-bottom: 10px;">❓ Ask About This Video</h3>
+                            box-shadow: 0 8px 20px rgba(0,0,0,0.1); margin-top: 0px;">
+                    <h3 style="text-align: left; margin-bottom: 0px;">❓ Ask About This Video</h3>
                 </div>
                 """, unsafe_allow_html=True)
-
-                question = st.text_input("Ask something about this video", key="detail_question")
+                # question = st.text_input(label='Ask something about this video', key="detail_question")
+                question = st.text_input(label='Ask something about this video', key="detail_question",label_visibility="collapsed")
                 if st.button("💬 Get Answer", use_container_width=True):
                     if question:
                         with st.spinner("Thinking..."):
@@ -702,7 +787,19 @@ elif page == "video":
                                     "question": question
                                 })
                                 if resp.status_code == 200:
-                                    st.success("🤖 " + resp.json().get("answer", "No response"))
+                                    response = resp.json().get("answer", "No response")
+                                    st.markdown(f"""
+                                    <div style="padding: 20px; border-radius: 16px;
+                                                background: {'#1c1e26' if st.session_state.theme == 'dark' else '#ffffff'};
+                                                border-left: 4px solid {card_border}; border-right: 4px solid {card_border2};
+                                                box-shadow: 0 8px 20px rgba(0,0,0,0.1); margin-top: 10px;
+                                                max-height: 200px; overflow-y: auto;">
+                                        <h4 style="margin-bottom: 10px;">🤖 Response</h4>
+                                        <p style="line-height: 1.6; color: {'#f1f1f1' if st.session_state.theme == 'dark' else '#333'};">
+                                            {response}
+                                        </p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
                                 else:
                                     st.warning("No answer returned.")
                             except Exception as e:
@@ -718,3 +815,7 @@ elif page == "video":
             st.error("❌ Failed to load video details.")
     except Exception as e:
         st.error(f"❌ Video detail error: {e}")
+        
+    if st.button("🔙 Back to Dashboard"):
+        st.query_params.update({"page": "dashboard"})
+        st.rerun()

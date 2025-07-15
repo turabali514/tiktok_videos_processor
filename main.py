@@ -5,13 +5,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from urllib.parse import urlparse
 import openai, re, transcribe, download, db, os, uvicorn,json,sys,concurrent.futures, subprocess, tempfile
-
+import time
+from openai import OpenAI
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 app = FastAPI()
-client = openai.AsyncOpenAI()
+client = OpenAI()
 db.init_db()
 
+MAX_RETRIES=3
 VIDEO_DIR = "videos"
 os.makedirs(VIDEO_DIR, exist_ok=True)
 app.mount("/videos", StaticFiles(directory=VIDEO_DIR), name="videos")
@@ -73,41 +75,85 @@ def signup(req: SignupRequest):
 
 @app.post("/login")
 def login(req: LoginRequest):
-    user = db.validate_user(req.email, req.password)
-    return {"user_id": user} if user else {"error": "Invalid credentials"}
+    result = db.validate_user(req.email, req.password)
+
+    if "error" in result:
+        return {"error": result["error"]}
+
+    return {"user_id": result["user_id"]}
 
 # --- Import ---
 def import_worker(user_id, url):
     import traceback
     try:
         video_jobs[url] = "Downloading"
-
-
         existing = db.get_video_by_url(url)
         if existing:
             db.link_user_video(user_id, existing["id"])
             video_jobs[url] = "Completed (linked)"
             return
 
-        file_path, metadata = download.download_video(url)
-        if not os.path.exists(file_path) or os.path.getsize(file_path) < 1000:
-            raise Exception("Download failed or returned small file")
+        # --- DOWNLOAD with RETRIES ---
+        file_path, metadata = None, None
+        for attempt in range(MAX_RETRIES):
+            try:
+                file_path, metadata = download.download_video(url)
+                if not os.path.exists(file_path) or os.path.getsize(file_path) < 1000:
+                    raise Exception("Download failed or returned small file")
+                break  # success
+            except Exception as e:
+                print(f"[Download Retry {attempt+1}] Error: {e}")
+                time.sleep(1)
+        else:
+            raise Exception("Failed to download video after retries")
 
+        # --- TRANSCRIPTION with RETRIES ---
         video_jobs[url] = "Transcribing"
-        transcript = transcribe.transcribe_audio(file_path)
+        transcript = ""
+        for attempt in range(MAX_RETRIES):
+            try:
+                transcript = transcribe.transcribe_audio(file_path)
+                if transcript.strip() == "":
+                    raise Exception("Empty transcript")
+                break
+            except Exception as e:
+                print(f"[Transcription Retry {attempt+1}] Error: {e}")
+                time.sleep(2)
+        else:
+            raise Exception("Failed to transcribe video after retries")
 
-        # Save transcript early and get video_id
-        video_id = db.add_video_record(url, file_path, transcript, metadata)
+        # --- OPENAI SUMMARY with RETRIES ---
+        summary_prompt = f"Summarize this TikTok video transcript:\n\n{transcript}"
+        summary = ""
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You summarize TikTok transcripts into 2-3 lines."},
+                        {"role": "user", "content": summary_prompt}
+                    ],
+                    max_tokens=150
+                )
+                summary = response.choices[0].message.content.strip()
+                break
+            except Exception as e:
+                print(f"[Summary Retry {attempt+1}] Error: {e}")
+                time.sleep(2)
+        else:
+            raise Exception("Failed to get summary after retries")
+
+        # --- DB Save ---
+        video_id = db.add_video_record(url, file_path, transcript, metadata, summary)
         db.link_user_video(user_id, video_id)
 
-        # Write transcript to temp file and call embed_worker
         with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8", suffix=".txt") as tf:
             tf.write(transcript)
             tf_path = tf.name
 
         env = os.environ.copy()
         env["EMBED_TEXT_PATH"] = tf_path
-        env["VIDEO_ID"] = str(video_id)  
+        env["VIDEO_ID"] = str(video_id)
 
         result = subprocess.run(
             [sys.executable, "embed_worker.py"],
@@ -115,8 +161,7 @@ def import_worker(user_id, url):
             capture_output=True,
             text=True,
         )
-
-        os.unlink(tf_path)  
+        os.unlink(tf_path)
 
         if result.returncode != 0:
             raise Exception(f"Embedding failed:\n{result.stderr}")
@@ -155,11 +200,11 @@ def import_video(req: ImportRequest):
     }
 
 
-@app.get("/progress")
+@app.post("/progress")
 def get_progress():
     return video_jobs
 
-@app.get("/videos")
+@app.post("/videos")
 def get_user_videos(user_id: int = Query(...)):
     try:
         videos = db.get_videos_for_user(user_id)
@@ -173,6 +218,7 @@ def get_user_videos(user_id: int = Query(...)):
                 "video_diggcount": v["video_diggcount"],
                 "video_commentcount": v["video_commentcount"],
                 "video_sharecount": v["video_sharecount"],
+                "summary": v["summary"],
             }
             for v in videos
         ]
@@ -183,9 +229,15 @@ def get_user_videos(user_id: int = Query(...)):
 def query_video(req: QueryRequest):
     
     print("🎯 Launching RAG subprocess...")
+    print("started:")
+    start_time = time.time()
     script_path = os.path.join(os.path.dirname(__file__), "rag.py")
     cmd = f'"{sys.executable}" "{script_path}" {req.video_id} "{req.question}"'
+    end_time = time.time()
+    print(f"Exe file making: {end_time - start_time:.4f} seconds")
+
     try:
+        start_time = time.time()
         result = subprocess.run(
             cmd,
             shell=True,
@@ -194,7 +246,8 @@ def query_video(req: QueryRequest):
             text=True,
             timeout=40
         )
-
+        end_time = time.time()
+        print(f"Execution time: {end_time - start_time:.4f} seconds")
         print("📄 STDOUT:\n", result.stdout if result.stdout.strip() else "[no stdout]")
         print("⚠️ STDERR:\n", result.stderr if result.stderr.strip() else "[no stderr]")
         print("🔁 Return code:", result.returncode)

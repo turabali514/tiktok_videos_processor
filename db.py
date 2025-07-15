@@ -28,7 +28,7 @@ def init_db():
     url TEXT UNIQUE,         
     file_path TEXT,
     transcript TEXT,
-    video_id TEXT,
+    video_id TEXT UNIQUE,
     video_timestamp TEXT,
     video_duration INTEGER,
     video_locationcreated TEXT,
@@ -48,7 +48,8 @@ def init_db():
     author_verified BOOLEAN,
     poi_name TEXT,
     poi_address TEXT,
-    poi_city TEXT
+    poi_city TEXT,
+    summary TEXT
 )
     """)
 
@@ -83,15 +84,26 @@ def add_user(email, password):
 
 
 def validate_user(email, password):
-    """Check email/password. Returns user row or None."""
+    """Validate login. Returns specific errors or user ID."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ? AND password = ?", (email, password))
+
+    # Check if email exists
+    cursor.execute("SELECT id, password FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
-    conn.close()
+
     if user is None:
-        return None
-    return user["id"]
+        conn.close()
+        return {"error": "Email not registered"}
+
+    # Check password
+    if user["password"] != password:
+        conn.close()
+        return {"error": "Invalid password"}
+
+    conn.close()
+    return {"user_id": user["id"]}
+
 
 def get_video_by_url(url):
     """Return the video row if it exists, else None."""
@@ -101,7 +113,7 @@ def get_video_by_url(url):
     row = cur.fetchone()
     conn.close()
     return row
-def add_video_record(url, file_path, transcript,metadata):
+def add_video_record(url, file_path, transcript,metadata,summary=None):
     """Insert into videos; returns the new video_id."""
     conn = get_db()
     cur = conn.cursor()
@@ -113,8 +125,8 @@ def add_video_record(url, file_path, transcript,metadata):
             video_description, video_is_ad, author_username,
             author_name, author_followercount, author_followingcount,
             author_heartcount, author_videocount, author_diggcount,
-            author_verified, poi_name, poi_address, poi_city
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            author_verified, poi_name, poi_address, poi_city,summary
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
     """, (
         url, file_path, transcript,
         metadata.get("video_id"),
@@ -137,7 +149,8 @@ def add_video_record(url, file_path, transcript,metadata):
         metadata.get("author_verified") == "True",
         metadata.get("poi_name"),
         metadata.get("poi_address"),
-        metadata.get("poi_city")
+        metadata.get("poi_city"),
+        summary
     ))
     conn.commit()
     vid = cur.lastrowid
@@ -165,7 +178,7 @@ def get_videos_for_user(user_id):
     cur = conn.cursor()
     cur.execute("""
       SELECT v.id, v.url, v.file_path, v.transcript,v.video_playcount, v.video_diggcount,
-             v.video_commentcount, v.video_sharecount
+             v.video_commentcount, v.video_sharecount,v.summary
       FROM videos v
       JOIN user_videos uv ON uv.video_id = v.id
       WHERE uv.user_id = ?

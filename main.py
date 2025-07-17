@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 import openai, re, transcribe, download, db, os, uvicorn,json,sys,concurrent.futures, subprocess, tempfile
 import time
 from openai import OpenAI
+from rag import ask
+from embed_worker import embed_transcript
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 app = FastAPI()
@@ -147,26 +149,10 @@ def import_worker(user_id, url):
         video_id = db.add_video_record(url, file_path, transcript, metadata, summary)
         db.link_user_video(user_id, video_id)
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, encoding="utf-8", suffix=".txt") as tf:
-            tf.write(transcript)
-            tf_path = tf.name
-
-        env = os.environ.copy()
-        env["EMBED_TEXT_PATH"] = tf_path
-        env["VIDEO_ID"] = str(video_id)
-
-        result = subprocess.run(
-            [sys.executable, "embed_worker.py"],
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-        os.unlink(tf_path)
-
-        if result.returncode != 0:
-            raise Exception(f"Embedding failed:\n{result.stderr}")
-        else:
-            print(result.stdout)
+        try: 
+            embed_transcript(transcript, video_id)
+        except Exception as e:
+            raise Exception(f"Embedding failed: {e}")
 
         video_jobs[url] = "Completed"
 
@@ -227,46 +213,8 @@ def get_user_videos(user_id: int = Query(...)):
 
 @app.post("/query")
 def query_video(req: QueryRequest):
-    
-    print("🎯 Launching RAG subprocess...")
-    print("started:")
-    start_time = time.time()
-    script_path = os.path.join(os.path.dirname(__file__), "rag.py")
-    cmd = f'"{sys.executable}" "{script_path}" {req.video_id} "{req.question}"'
-    end_time = time.time()
-    print(f"Exe file making: {end_time - start_time:.4f} seconds")
-
-    try:
-        start_time = time.time()
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=40
-        )
-        end_time = time.time()
-        print(f"Execution time: {end_time - start_time:.4f} seconds")
-        print("📄 STDOUT:\n", result.stdout if result.stdout.strip() else "[no stdout]")
-        print("⚠️ STDERR:\n", result.stderr if result.stderr.strip() else "[no stderr]")
-        print("🔁 Return code:", result.returncode)
-
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Subprocess failed:\n{result.stderr}")
-
-        try:
-            answer_json = json.loads(result.stdout)
-        except json.JSONDecodeError as json_err:
-            raise HTTPException(status_code=500, detail=f"Invalid JSON output:\n{result.stdout}\nError: {json_err}")
-
-        return answer_json
-
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="LLM response timed out.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unhandled error: {e}")
-
+    answer = ask(question=req.question, video_id=req.video_id)
+    return answer
 
 
 if __name__ == "__main__":

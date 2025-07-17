@@ -1,6 +1,6 @@
 import streamlit as st
-import requests
-from streamlit_autorefresh import st_autorefresh
+import requests,json
+from streamlit_autorefresh import st_autorefresh 
 # --- Page Config ---
 st.set_page_config(page_title="TikTok Insights", layout="wide", page_icon="🎵")
 st.markdown("""
@@ -624,6 +624,9 @@ elif page == "dashboard":
                                     if st.button("💬 Ask", key=f"ask_{vid['id']}", use_container_width=True):
                                         question = st.session_state.get(q_key)
                                         if question:
+                                            for key in list(st.session_state.keys()):
+                                                if key.startswith("answer_"):
+                                                    del st.session_state[key]
                                             with st.spinner("Getting answer..."):
                                                 try:
                                                     resp = requests.post("http://127.0.0.1:8000/query", json={
@@ -639,10 +642,15 @@ elif page == "dashboard":
                                                     st.error(f"❌ Query error: {e}")
 
                                     answer = st.session_state.get(f"answer_{vid['id']}")
-                                    if answer:
+                                with col2:
+                                    if st.button("🔍 View Details", key=f"full_{vid['id']}", use_container_width=True):
+                                        st.session_state.selected_video = vid["id"]
+                                        st.query_params.update({"page": "video"})
+                                        st.rerun()
+                                if answer:
                                         st.markdown(f"""
-                                        <div style="margin-top: 10px; max-height: 150px; overflow-y: auto; 
-                                                    padding: 10px; border-radius: 12px; 
+                                        <div style="margin-top: 10px; max-height: 200px; overflow-y: auto; 
+                                                    padding: 10px; border-radius: 12px;
                                                     background: {'#1c1e26' if st.session_state.theme == 'dark' else '#f4f7fb'};
                                                     border-left: 4px solid #0072ff; border-right: 4px solid #00c6ff;
                                                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
@@ -652,18 +660,13 @@ elif page == "dashboard":
                                             </div>
                                         </div>
                                         """, unsafe_allow_html=True)
-                                with col2:
-                                    if st.button("🔍 View Details", key=f"full_{vid['id']}", use_container_width=True):
-                                        st.session_state.selected_video = vid["id"]
-                                        st.query_params.update({"page": "video"})
-                                        st.rerun()
 
             else:
                 st.info("👋 You haven't imported any videos yet. Start by pasting a TikTok URL above!")
     except Exception as e:
         st.error(f"Video fetch error: {e}")
 
-if st.session_state.import_status and all(v == "Completed" for v in st.session_state.import_status.values()):
+if st.session_state.import_status and all(v == "Completed" or v=="Completed (linked)"  for v in st.session_state.import_status.values()):
     st.session_state.import_status = {}
 # --- Video Detail Page ---
 elif page == "video":
@@ -692,23 +695,20 @@ elif page == "video":
 
                 # Render video with intermediate height and responsive width
                 st.markdown(f"""
-                <div style="width: 100%; display: flex; justify-content: left; margin-bottom: 20px;">
-                    <video controls style="width: 100%; max-width: 720px; height: 400px; border-radius: 12px;
-                        box-shadow: 0 8px 20px rgba(0,0,0,0.2);">
-                        <source src="{video['file_path']}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # Render stats block underneath
-                st.markdown(f"""
+                <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 20px;">
+                        <div style="width: 100%; display: flex; justify-content: left; margin-bottom: 20px;">
+                            <video controls style="width: 100%; max-width: 720px; height: 400px; border-radius: 12px;
+                                box-shadow: 0 8px 20px rgba(0,0,0,0.2);">
+                                <source src="{video['file_path']}" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                        </div>
                 <div style="background: linear-gradient(135deg, {card_bg} 0%, {card_bg} 100%); 
-                        padding: 10px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+                        padding: 0px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                         border-left: 4px solid {card_border}; border-right: 4px solid {card_border2}; 
-                        max-width: 720px;">
+                        height: 400px;min-width:400px; display: flex; flex-direction: column; justify-content: center">
                     <h3 style="text-align: center; margin-bottom: 10px;">📊 Video Statistics</h3>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                         <div style="text-align: center; padding: 10px; border-radius: 8px; 
                                     background: rgba(244, 247, 251, 0.7);">
                             <div style="font-size: 1.5rem;">👁️</div>

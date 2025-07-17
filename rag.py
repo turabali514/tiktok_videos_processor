@@ -5,7 +5,7 @@ from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from create_vector_db import get_vector_store
 from typing import List, Any
-import concurrent.futures
+import concurrent.futures,json
 
 # ✅ Shared setup
 store = get_vector_store()
@@ -56,23 +56,10 @@ def ask(question: str, video_id: str) -> str:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(chain.invoke, question)
             result = future.result(timeout=30)
-        return result
+        return {"answer": result}
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         return json.dumps({"error": f"RAG pipeline error: {str(e)}"})
 
-if __name__ == "__main__":
-    import sys
-    import json
-    if len(sys.argv) >= 3:
-        video_id = sys.argv[1]
-        question = " ".join(sys.argv[2:])
-        answer = ask(question=question, video_id=video_id)
-        if isinstance(answer, str) and answer.startswith("{"):
-            print(answer)  
-        else:
-            print(json.dumps({"answer": answer}))
-    else:
-        print("Usage: python rag_chain.py <video_id> <question>")

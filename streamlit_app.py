@@ -1,6 +1,12 @@
 import streamlit as st
-import requests,json
+import requests,os
 from streamlit_autorefresh import st_autorefresh 
+from streamlit_js_eval import get_cookie, set_cookie,streamlit_js_eval
+from itsdangerous import URLSafeSerializer
+from dotenv import load_dotenv
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-insecure-key") 
+serializer = URLSafeSerializer(SECRET_KEY)
 # --- Page Config ---
 st.set_page_config(page_title="TikTok Insights", layout="wide", page_icon="🎵")
 st.markdown("""
@@ -30,6 +36,30 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+streamlit_js_eval(js_expressions="", key="force_mount")
+session_token = get_cookie("session", component_key="get_session_token")
+if session_token:
+    try:
+        payload = serializer.loads(session_token)
+        st.session_state.user_id = payload["user_id"]
+        st.session_state.email = payload["email"]
+        st.session_state.logged_in = True
+        st.session_state.session = requests.Session()
+        st.session_state.session.cookies.set("session", session_token)
+    except Exception as e:
+        st.warning(f"Invalid session token: {e}")
+        st.stop()
+else:
+    st.info("⏳ Waiting for cookie to be set...")
+if "session" not in st.session_state:
+    st.session_state.session = requests.Session()
+if "logged_in" not in st.session_state:
+    st.session_state.session = requests.Session()
+    st.session_state.session.cookies.set("session", session_token)
+    st.session_state.logged_in = True
+
+
 # --- Session Setup ---
 default_session_state = {
     'user_id': None,
@@ -44,6 +74,13 @@ for key, default_value in default_session_state.items():
     if key not in st.session_state or st.session_state[key] is None:
         st.session_state[key] = default_value
 params = st.query_params
+if "last_query_params" not in st.session_state:
+    st.session_state.last_query_params = dict(params)
+    print(dict(params))
+elif dict(params) != st.session_state.last_query_params:
+    st.session_state.last_query_params = dict(params)
+    print(dict(params))
+    st.rerun()
 if (
     st.session_state.user_id is None
     and "user_id" in params
@@ -55,7 +92,7 @@ if (
     # Optional: prefetch videos if cache is empty
     if not st.session_state.video_data_cache:
         try:
-            videos_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+            videos_res = st.session_state.session.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
             if videos_res.status_code == 200:
                 st.session_state.video_data_cache = videos_res.json()
         except Exception as e:
@@ -74,200 +111,209 @@ if st.session_state.user_id:
     if st.sidebar.button("🚪 Logout"):
         for key in ['user_id', 'email', 'import_status', 'selected_video', 'video_data_cache']:
             st.session_state[key] = None
+        set_cookie("session", "", duration_days=-1)
         st.query_params.clear()
         st.rerun()
 
 # --- Theme CSS ---
 theme_css = {
     "dark": """
-    <style>
-    body, .stApp { 
-        background: linear-gradient(135deg, #0f1117 0%, #1a1c25 100%); 
-        color: #f1f1f1; 
-        section.main > div:first-child {
-        padding-top: 0rem !important;
-        margin-top: 0rem !important;}
-    }
-    h1 {
-    font-size: 1.6rem !important;
+<style>
+body, .stApp { 
+    background: linear-gradient(135deg, #0f1117 0%, #1a1c25 100%); 
+    color: #f1f1f1; 
 }
-h2 {
-    font-size: 1.4rem !important;
+section.main > div:first-child {
+    padding-top: 0rem !important;
+    margin-top: 0rem !important;
 }
-h3 {
-    font-size: 1.2rem !important;
+h1 { font-size: 1.6rem !important; }
+h2 { font-size: 1.4rem !important; }
+h3 { font-size: 1.2rem !important; }
+h1, h2, h3 {
+    background: linear-gradient(90deg, #ffcc70, #c850c0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
 }
-    h1, h2, h3 {
-        background: linear-gradient(90deg, #ffcc70, #c850c0);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700;
-    }
-    .stButton>button {
-        background: linear-gradient(90deg, #fc6076, #ff9a44);
-        color: white;
-        border-radius: 10px;
-        padding: 8px 16px;
-        border: none;
-        box-shadow: 0 4px 12px rgba(252, 96, 118, 0.3);
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 7px 15px rgba(252, 96, 118, 0.4);
-    }
-    .divider { 
-        border-bottom: 2px solid #444; 
-        margin: 1.8rem 0; 
-    }
-    .video-card {
-        background: linear-gradient(135deg, #1c1e26 0%, #252836 100%);
-        padding: 20px;
-        border-radius: 16px;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-        transition: transform 0.3s, box-shadow 0.3s;
-        margin-bottom: 25px;
-        border-left: 4px solid #fc6076;
-    }
-    .video-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 25px rgba(252, 96, 118, 0.2);
-    }
-    .video-bubble {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        background: linear-gradient(135deg, #1c1e26 0%, #252836 100%);
-        padding: 22px;
-        margin-bottom: 28px;
-        border-radius: 20px;
-        border-left: 4px solid #fc6076;
-        border-right: 4px solid #ff9a44;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .video-bubble:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 30px rgba(252, 96, 118, 0.25);
-    }
-    .video-bubble video {
-        width: 100%;
-        border-radius: 12px;
-        margin-bottom: 15px;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-    }
-    .video-bubble .stats {
-        font-size: 14px;
-        margin: 6px 0;
-        color: #ffcc70;
-        text-align: center;
-    }
-    .video-bubble .stats a {
-        color: #ff9a44;
-        text-decoration: none;
-        transition: color 0.2s;
-    }
-    .video-bubble .stats a:hover {
-        color: #fc6076;
-        text-decoration: underline;
-    }
-    </style>
-    """,
+
+/* NEW: fix label and placeholder visibility */
+label, .css-1cpxqw2, .css-1n76uvr, span, small {
+    color: #f1f1f1 !important;
+}
+input::placeholder {
+    color: #cccccc;
+}
+
+/* Buttons */
+.stButton>button {
+    background: linear-gradient(90deg, #fc6076, #ff9a44);
+    color: white;
+    border-radius: 10px;
+    padding: 8px 16px;
+    border: none;
+    box-shadow: 0 4px 12px rgba(252, 96, 118, 0.3);
+    transition: all 0.3s ease;
+}
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 15px rgba(252, 96, 118, 0.4);
+}
+
+/* Cards and Bubbles (unchanged) */
+.divider { border-bottom: 2px solid #444; margin: 1.8rem 0; }
+.video-card {
+    background: linear-gradient(135deg, #1c1e26 0%, #252836 100%);
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s, box-shadow 0.3s;
+    margin-bottom: 25px;
+    border-left: 4px solid #fc6076;
+}
+.video-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 25px rgba(252, 96, 118, 0.2);
+}
+.video-bubble {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: linear-gradient(135deg, #1c1e26 0%, #252836 100%);
+    padding: 22px;
+    margin-bottom: 28px;
+    border-radius: 20px;
+    border-left: 4px solid #fc6076;
+    border-right: 4px solid #ff9a44;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.video-bubble:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(252, 96, 118, 0.25);
+}
+.video-bubble video {
+    width: 100%;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+.video-bubble .stats {
+    font-size: 14px;
+    margin: 6px 0;
+    color: #ffcc70;
+    text-align: center;
+}
+.video-bubble .stats a {
+    color: #ff9a44;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+.video-bubble .stats a:hover {
+    color: #fc6076;
+    text-decoration: underline;
+}
+</style>
+""",
     "light": """
-    <style>
-    body, .stApp { 
-        background: linear-gradient(135deg, #f4f7fb 0%, #ffffff 100%); 
-        color: #333; 
-        section.main > div:first-child {
-            padding-top: 0rem !important;
-            margin-top: 0rem !important;
-        }
-    }
-    h1 {
-    font-size: 1.6rem !important;
+<style>
+body, .stApp { 
+    background: linear-gradient(135deg, #f4f7fb 0%, #ffffff 100%); 
+    color: #333; 
 }
-h2 {
-    font-size: 1.4rem !important;
+section.main > div:first-child {
+    padding-top: 0rem !important;
+    margin-top: 0rem !important;
 }
-h3 {
-    font-size: 1.2rem !important;
+h1 { font-size: 1.6rem !important; }
+h2 { font-size: 1.4rem !important; }
+h3 { font-size: 1.2rem !important; }
+h1, h2, h3 {
+    background: linear-gradient(90deg, #0072ff, #00c6ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
 }
-    h1, h2, h3 {
-        background: linear-gradient(90deg, #0072ff, #00c6ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700;
-    }
-    .stButton>button {
-        background: linear-gradient(90deg, #0072ff, #00c6ff);
-        color: white;
-        border-radius: 10px;
-        padding: 8px 16px;
-        border: none;
-        box-shadow: 0 4px 12px rgba(0, 114, 255, 0.2);
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 7px 15px rgba(0, 114, 255, 0.3);
-    }
-    .divider { 
-        border-bottom: 2px solid #e0e0e0; 
-        margin: 1.8rem 0; 
-    }
-    .video-card {
-        background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 100%);
-        padding: 20px;
-        border-radius: 16px;
-        box-shadow: 0 8px 20px rgba(0, 114, 255, 0.1);
-        transition: transform 0.3s, box-shadow 0.3s;
-        margin-bottom: 25px;
-        border-left: 4px solid #0072ff;
-    }
-    .video-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 25px rgba(0, 114, 255, 0.15);
-    }
-    .video-bubble {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 100%);
-        padding: 22px;
-        margin-bottom: 28px;
-        border-radius: 20px;
-        border-left: 4px solid #0072ff;
-        border-right: 4px solid #00c6ff;
-        box-shadow: 0 10px 25px rgba(0, 114, 255, 0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .video-bubble:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 30px rgba(0, 114, 255, 0.2);
-    }
-    .video-bubble video {
-        width: 100%;
-        border-radius: 12px;
-        margin-bottom: 15px;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    }
-    .video-bubble .stats {
-        font-size: 14px;
-        margin: 6px 0;
-        color: #0072ff;
-        text-align: center;
-    }
-    .video-bubble .stats a {
-        color: #00c6ff;
-        text-decoration: none;
-        transition: color 0.2s;
-    }
-    .video-bubble .stats a:hover {
-        color: #0072ff;
-        text-decoration: underline;
-    }
-    </style>
-    """
+
+/* NEW: fix label and placeholder visibility */
+label, .css-1cpxqw2, .css-1n76uvr, span, small {
+    color: #000 !important;
+}
+input::placeholder {
+    color: #777;
+}
+
+/* Buttons */
+.stButton>button {
+    background: linear-gradient(90deg, #0072ff, #00c6ff);
+    color: white;
+    border-radius: 10px;
+    padding: 8px 16px;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 114, 255, 0.2);
+    transition: all 0.3s ease;
+}
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 15px rgba(0, 114, 255, 0.3);
+}
+
+/* Cards and Bubbles (unchanged) */
+.divider { border-bottom: 2px solid #e0e0e0; margin: 1.8rem 0; }
+.video-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 100%);
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0, 114, 255, 0.1);
+    transition: transform 0.3s, box-shadow 0.3s;
+    margin-bottom: 25px;
+    border-left: 4px solid #0072ff;
+}
+.video-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 25px rgba(0, 114, 255, 0.15);
+}
+.video-bubble {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 100%);
+    padding: 22px;
+    margin-bottom: 28px;
+    border-radius: 20px;
+    border-left: 4px solid #0072ff;
+    border-right: 4px solid #00c6ff;
+    box-shadow: 0 10px 25px rgba(0, 114, 255, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.video-bubble:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0, 114, 255, 0.2);
+}
+.video-bubble video {
+    width: 100%;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+.video-bubble .stats {
+    font-size: 14px;
+    margin: 6px 0;
+    color: #0072ff;
+    text-align: center;
+}
+.video-bubble .stats a {
+    color: #00c6ff;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+.video-bubble .stats a:hover {
+    color: #0072ff;
+    text-decoration: underline;
+}
+</style>
+"""
+
 }
 
 st.markdown(theme_css[st.session_state.theme], unsafe_allow_html=True)
@@ -295,17 +341,17 @@ if page == "login":
         """, unsafe_allow_html=True)
         
         login_container = """
-        <div style="background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 100%); 
-                   padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0, 114, 255, 0.15);
-                   border-left: 4px solid #0072ff; border-right: 4px solid #00c6ff; margin-bottom: 30px;">
-        """
+<div style="background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 100%); 
+            padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0, 114, 255, 0.15);
+            border-left: 4px solid #0072ff; border-right: 4px solid #00c6ff; margin-bottom: 30px; color: #000000;">
+"""
         
         if st.session_state.theme == "dark":
             login_container = """
-            <div style="background: linear-gradient(135deg, #1c1e26 0%, #252836 100%); 
-                       padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-                       border-left: 4px solid #fc6076; border-right: 4px solid #ff9a44; margin-bottom: 30px;">
-            """
+    <div style="background: linear-gradient(135deg, #1c1e26 0%, #252836 100%); 
+                padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+                border-left: 4px solid #fc6076; border-right: 4px solid #ff9a44; margin-bottom: 30px; color: #f1f1f1;">
+    """
             
         st.markdown(login_container, unsafe_allow_html=True)
         
@@ -318,14 +364,19 @@ if page == "login":
         
         if login_btn:
             with st.spinner("Authenticating..."):
+                session = st.session_state.session
                 try:
-                    res = requests.post("http://127.0.0.1:8000/login", json={"email": email, "password": password})
+                    res = st.session_state.session.post("http://127.0.0.1:8000/login", json={"email": email, "password": password})
+                    cookies = session.cookies.get_dict()
                     data = res.json()
-                    if res.status_code == 200 and 'user_id' in data:
+                    if res.status_code == 200 and "session" in session.cookies.get_dict():
+                        session_token = session.cookies.get_dict()["session"]
+                        set_cookie("session",session_token ,duration_days=1,component_key="set_session_token")
+                        st.session_state.logged_in = True
                         st.session_state.user_id = data["user_id"]
                         st.session_state.email = email
                         try:
-                            videos_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": data["user_id"]})
+                            videos_res = st.session_state.session.post("http://127.0.0.1:8000/videos", params={"user_id": data["user_id"]})
                             if videos_res.status_code == 200:
                                 st.session_state.video_data_cache = videos_res.json()
                         except Exception as e:
@@ -333,7 +384,7 @@ if page == "login":
                         st.balloons()
                         st.success("🎉 Login successful!")
                         st.query_params.update({"page": "dashboard"})
-                        st.rerun()
+                        st_autorefresh(interval=2000, limit=3, key="cookie_wait")
                     else:
                         st.error(data.get("error", "Login failed. Please check your credentials."))
                 except Exception as e:
@@ -400,7 +451,7 @@ elif page == "signup":
                     st.error("❌ Passwords do not match!")
                 else:
                     try:
-                        res = requests.post("http://127.0.0.1:8000/signup", json={"email": email, "password": password})
+                        res = st.session_state.session.post("http://127.0.0.1:8000/signup", json={"email": email, "password": password})
                         if res.status_code == 200:
                             data = res.json()
                             if 'user_id' in data:
@@ -476,7 +527,7 @@ elif page == "dashboard":
         with st.spinner("Processing your import request..."):
             payload = {"user_id": st.session_state.user_id, "url": url_input}
             try:
-                res = requests.post("http://127.0.0.1:8000/import_video", json=payload)
+                res = st.session_state.session.post("http://127.0.0.1:8000/import_video", json=payload)
                 data = res.json()
 
                 msg = data.get("message", "Import started!")
@@ -493,7 +544,7 @@ elif page == "dashboard":
 
                 st.success(f"✅ {msg}")
                 try:
-                    videos_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+                    videos_res = st.session_state.session.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
                     if videos_res.status_code == 200:
                         st.session_state.video_data_cache = videos_res.json()
                 except Exception as e:
@@ -512,7 +563,7 @@ elif page == "dashboard":
         
         with st.spinner("🔄 Updating import status..."):
             try:
-                res = requests.post("http://127.0.0.1:8000/progress")
+                res = st.session_state.session.post("http://127.0.0.1:8000/progress")
                 if res.status_code == 200:
                     for url in list(st.session_state.import_status.keys()):
                         if url in res.json():
@@ -525,7 +576,7 @@ elif page == "dashboard":
                 if just_completed:
     # Fetch latest video list
                     try:
-                        video_res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+                        video_res =st.session_state.session.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
                         if video_res.status_code == 200:
                             st.session_state.video_data_cache = video_res.json()
                             if "imported_video_urls" not in st.session_state:
@@ -566,7 +617,7 @@ elif page == "dashboard":
     try:
         with st.spinner("Loading your videos..."):
             if not st.session_state.video_data_cache:
-                res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+                res = st.session_state.session.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
                 if res.status_code == 200:
                     st.session_state.video_data_cache = res.json()
                 else:
@@ -604,14 +655,12 @@ elif page == "dashboard":
                                     </div>
                                 </div>
                                 """
-
                                 st.markdown(f"""
                                 <div class="video-bubble">
                                     <video controls style="width: 100%; max-width: auto; height: 200px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
                                         <source src="{vid['file_path']}" type="video/mp4">
                                         Your browser does not support the video tag.
-                                    </video>
-                                    
+                                    </video>    
                                     {stats_html}
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -629,7 +678,7 @@ elif page == "dashboard":
                                                     del st.session_state[key]
                                             with st.spinner("Getting answer..."):
                                                 try:
-                                                    resp = requests.post("http://127.0.0.1:8000/query", json={
+                                                    resp = st.session_state.session.post("http://127.0.0.1:8000/query", json={
                                                         "video_id": vid["id"],
                                                         "question": question
                                                     })
@@ -676,7 +725,7 @@ elif page == "video":
         st.rerun()
 
     try:
-        res = requests.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
+        res =st.session_state.session.post("http://127.0.0.1:8000/videos", params={"user_id": st.session_state.user_id})
         if res.status_code == 200:
             videos = res.json()
             video = next((v for v in videos if v['id'] == st.session_state.selected_video), None)
@@ -696,8 +745,8 @@ elif page == "video":
                 # Render video with intermediate height and responsive width
                 st.markdown(f"""
                 <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 20px;">
-                        <div style="width: 100%; display: flex; justify-content: left; margin-bottom: 20px;">
-                            <video controls style="width: 100%; max-width: 720px; height: 400px; border-radius: 12px;
+                        <div style="width: 70%; display: flex; justify-content: left; margin-bottom: 20px;">
+                            <video controls style="width: 100%; height: 400px; border-radius: 12px;
                                 box-shadow: 0 8px 20px rgba(0,0,0,0.2);">
                                 <source src="{video['file_path']}" type="video/mp4">
                                 Your browser does not support the video tag.
@@ -706,7 +755,7 @@ elif page == "video":
                 <div style="background: linear-gradient(135deg, {card_bg} 0%, {card_bg} 100%); 
                         padding: 0px; border-radius: 10px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                         border-left: 4px solid {card_border}; border-right: 4px solid {card_border2}; 
-                        height: 400px;min-width:400px; display: flex; flex-direction: column; justify-content: center">
+                        height: 400px;width:30%; display: flex; flex-direction: column; justify-content: center">
                     <h3 style="text-align: center; margin-bottom: 10px;">📊 Video Statistics</h3>
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                         <div style="text-align: center; padding: 10px; border-radius: 8px; 
@@ -782,7 +831,7 @@ elif page == "video":
                     if question:
                         with st.spinner("Thinking..."):
                             try:
-                                resp = requests.post("http://127.0.0.1:8000/query", json={
+                                resp = st.session_state.session.post("http://127.0.0.1:8000/query", json={
                                     "video_id": video["id"],
                                     "question": question
                                 })

@@ -12,7 +12,7 @@ def get_vector_store(video_id: int = None, embedding_fn=None, as_retriever: bool
     os.makedirs(db_path, exist_ok=True)
 
     if embedding_fn is None:
-        embedding_fn = OpenAIEmbeddings()
+        embedding_fn = OpenAIEmbeddings(model="text-embedding-3-small")
 
     vectorstore = Chroma(
         persist_directory=db_path,

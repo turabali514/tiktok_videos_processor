@@ -1,6 +1,0 @@
-
-[server]
-runOnSave = true
-
-[ui]
-hide_sidebar_nav = true

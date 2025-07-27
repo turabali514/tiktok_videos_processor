@@ -1,15 +1,17 @@
-from fastapi import FastAPI, HTTPException, Query, Response, Request, Depends
+from fastapi import FastAPI, HTTPException, Response, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from urllib.parse import urlparse
-import openai, re, transcribe, download, db, os, uvicorn,json,sys,concurrent.futures, time
+import openai, re, transcribe, download, db, os,json,concurrent.futures, time
 from openai import OpenAI
-from rag import ask
 from create_vector_db import add_new_transcript
 import itsdangerous
+from db import delete_highlight,update_highlight,get_highlights_for_video,add_highlight
 from fastapi.middleware.cors import CORSMiddleware
+from rag import ask,ask_from_all_videos
 from dotenv import load_dotenv
+from typing import Optional
 load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -25,7 +27,9 @@ video_jobs = {}
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["http://localhost:3000",  # frontend dev environment
+        "https://5ed8be1e46e8.ngrok-free.app"  # your actual frontend via ngrok
+        ], 
     allow_credentials=True,                  
     allow_methods=["*"],
     allow_headers=["*"],
@@ -64,7 +68,36 @@ class LoginRequest(BaseModel):
 class QueryRequest(BaseModel):
     video_id: int
     question: str
+class CrossVideoQueryRequest(BaseModel):
+    question: str
+class HighlightBase(BaseModel):
+    title: str
+    text: str
+    color: str
 
+class HighlightCreate(HighlightBase):
+    video_id: int
+
+class HighlightUpdate(BaseModel):
+    title: str
+    color: str
+
+class Highlight(HighlightBase):
+    id: int
+    video_id: int
+    created_at: str
+class CollectionCreate(BaseModel):
+    user_id: int
+    name: str
+    color: Optional[str] = '#3b82f6'
+    icon: Optional[str] = 'Folder'
+
+
+class CollectionUpdate(BaseModel):
+    collection_id: int
+    video_id: int
+class Config:
+        orm_mode = True
 def clean_tiktok_url(url):
     parsed = urlparse(url)
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
@@ -82,15 +115,16 @@ def signup(req: SignupRequest):
 @app.post("/login")
 def login(req: LoginRequest, response: Response):
     result = db.validate_user(req.email, req.password)
+    print(result)
     if "error" in result:
         return {"error": result["error"]}
     token = serializer.dumps({"user_id": result["user_id"], "email": req.email})
     response.set_cookie(
         key="session",
         value=token,
-        httponly=False,
+        httponly=True,
         samesite="None",
-        secure=False,
+        secure=True,
         path="/",
     )
     return {"message": "Login successful",
@@ -101,7 +135,16 @@ def login(req: LoginRequest, response: Response):
 # ✅ Logout: clear cookie
 @app.post("/logout")
 def logout(response: Response):
-    response.delete_cookie("session")
+    response.set_cookie(
+        key="session",
+        value="",
+        max_age=0,
+        expires=0,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite='None'
+    )
     return {"message": "Logged out"}
 
 # ✅ Auth extractor
@@ -118,7 +161,6 @@ def get_current_user(request: Request):
 def import_video(req: ImportRequest, user=Depends(get_current_user)):
     user_id = user["user_id"]
     req.url = clean_tiktok_url(req.url)
-
     if req.url in video_jobs and video_jobs[req.url] not in ["Failed", "Completed"]:
         existing = db.get_video_by_url(req.url)
         return {
@@ -137,10 +179,16 @@ def import_video(req: ImportRequest, user=Depends(get_current_user)):
         "clean_url": req.url,
         "video_id": video_id
     }
-
 @app.post("/progress")
-def get_progress():
-    return video_jobs
+async def get_progress(request: Request):
+    try:
+        # Just check if there are any jobs still processing
+        if not video_jobs:
+            return {"status": "completed"}
+        else:
+            return {"status": "processing", "active_jobs": len(video_jobs)}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/videos")
 def get_user_videos(user=Depends(get_current_user)):
@@ -157,10 +205,13 @@ def get_user_videos(user=Depends(get_current_user)):
                 "video_commentcount": v["video_commentcount"],
                 "video_sharecount": v["video_sharecount"],
                 "summary": v["summary"],
+                "description": v["video_description"],
+                "tags":v["tags"]
             }
             for v in videos
         ]
     except Exception as e:
+        print(e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/query")
@@ -204,7 +255,21 @@ def import_worker(user_id, url):
         else:
             raise Exception("Failed to transcribe video after retries")
 
-        summary_prompt = f"Summarize this TikTok video transcript:\n\n{transcript}"
+        summary_tags_prompt = f"""
+You are a content summarizer for short videos. Given the transcript below, produce:
+
+1. A concise 2-3 sentence summary of what the video is about.
+2. A list of 10 relevant tags (hashtags or keywords) describing the video content with the "#" format.
+
+Transcript:
+{transcript}
+
+Return your response in JSON format:
+{{
+  "summary": "...",
+  "tags": ["...", "..."]
+}}
+"""
         summary = ""
         for attempt in range(MAX_RETRIES):
             try:
@@ -212,10 +277,13 @@ def import_worker(user_id, url):
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": "You summarize TikTok transcripts into 2-3 lines."},
-                        {"role": "user", "content": summary_prompt}
+                        {"role": "user", "content": summary_tags_prompt}
                     ],
                 )
-                summary = response.choices[0].message.content.strip()
+                response= response.choices[0].message.content.strip()
+                data = json.loads(response)
+                summary = data["summary"]
+                tags= data["tags"]
                 break
             except Exception as e:
                 print(f"[Summary Retry {attempt+1}] Error: {e}")
@@ -223,7 +291,7 @@ def import_worker(user_id, url):
         else:
             raise Exception("Failed to get summary after retries")
 
-        video_id = db.add_video_record(url, file_path, transcript, metadata, summary)
+        video_id = db.add_video_record(url, file_path, transcript, metadata, summary,tags)
         db.link_user_video(user_id, video_id)
 
         try:
@@ -234,3 +302,108 @@ def import_worker(user_id, url):
         video_jobs[url] = "Completed"
     except Exception as e:
         video_jobs[url] = f"Failed: {str(e)}"
+@app.post("/query_across_videos")
+def query_across_videos(req: CrossVideoQueryRequest, user=Depends(get_current_user)):
+    """
+    Perform RAG search across all videos of the current user.
+    """
+    answer = ask_from_all_videos(question=req.question, user_id=user["user_id"])
+    return answer
+        
+@app.post("/highlights/")
+async def create_highlight(highlight: HighlightCreate, db=Depends(db.get_db), user=Depends(get_current_user)):
+    highlight_id = add_highlight(
+        user_id=user["user_id"],
+        video_id=highlight.video_id,
+        title=highlight.title,
+        text=highlight.text,
+        color=highlight.color
+    )
+    return {"id": highlight_id, "message": "Highlight created successfully"}
+
+@app.get("/highlights/{video_id}")
+async def get_highlights(video_id: int, db=Depends(db.get_db), user=Depends(get_current_user)):
+    highlights = get_highlights_for_video(user["user_id"], video_id)
+    return {"highlights": highlights}
+
+@app.put("/highlights/{highlight_id}")
+async def update_highlights(
+    highlight_id: int, 
+    highlight: HighlightUpdate, 
+    db=Depends(db.get_db), 
+    user=Depends(get_current_user)
+):
+    success = update_highlight(
+        highlight_id=highlight_id,
+        title=highlight.title,
+        color=highlight.color
+    )
+    print(highlight)
+    if not success:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+    return {"message": "Highlight updated successfully"}
+
+@app.delete("/highlights/{highlight_id}")
+async def delete_highlights(highlight_id: int, db=Depends(db.get_db), user=Depends(get_current_user)):
+    success = delete_highlight(highlight_id)
+    print(success)
+    if not success:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+    return {"message": "Highlight deleted successfully"}
+
+@app.post("/collections/create")
+def create_collection(data: CollectionCreate):
+    try:
+        collection_id = db.create_collection(
+            data.user_id, 
+            data.name,
+            data.color,
+            data.icon
+        )
+        print(collection_id)
+        return {"success": True, "collection_id": collection_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/collections/delete/{user_id}/{collection_id}")
+def delete_collection(user_id: int, collection_id: int):
+    print(user_id,collection_id)
+    try:
+        db.delete_collection(user_id, collection_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+@app.get("/collections/{user_id}")
+def get_user_collections(user_id: int):
+    try:
+        collections = db.get_collections(user_id)
+        return {"success": True, "collections": collections}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+@app.post("/collections/add_video")
+def add_video(data: CollectionUpdate):
+    print(data)
+    try:
+        db.add_video_to_collection(data.collection_id, data.video_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/collections/remove_video")
+def remove_video(data: CollectionUpdate):
+    try:
+        db.remove_video_from_collection(data.collection_id, data.video_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+@app.get("/collections/{collection_id}/videos")
+def get_collection_videos(collection_id: int):
+    try:
+        videos = db.get_collection_videos(collection_id)
+        print(videos)
+        return {"success": True, "videos": videos}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+@app.get("/check-auth")
+def check_auth(user=Depends(get_current_user)):
+    return {"authenticated": True, "user": user}

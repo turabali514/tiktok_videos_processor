@@ -30,8 +30,6 @@ def add_new_transcript(doc: str, video_id: int):
         for chunk in split_text
     ]
     db_instance = get_vector_store()
-    db_instance.add_documents(documents=docs)
-    for d in docs[:2]:
-        print(d.metadata)   
+    db_instance.add_documents(documents=docs) 
     db_instance = get_vector_store()
     stored = db_instance.get()["documents"]

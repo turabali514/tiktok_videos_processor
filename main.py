@@ -28,7 +28,7 @@ executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000",  # frontend dev environment
-        "https://5ed8be1e46e8.ngrok-free.app"  # your actual frontend via ngrok
+        "https://1d55226dfa61.ngrok-free.app"  # your actual frontend via ngrok
         ], 
     allow_credentials=True,                  
     allow_methods=["*"],
@@ -109,15 +109,19 @@ def shutdown_event():
 @app.post("/signup")
 def signup(req: SignupRequest):
     user = db.add_user(req.email, req.password)
-    return {"user_id": user} if user else {"error": "user already exists"}
-
+    if user: 
+        return {"user_id": user, "detail": "Registeration SUccessful, Login now!"}
+    else: 
+        raise HTTPException(status_code=404, detail="User already exists")
+    
 # ✅ Secure login: Set cookie
 @app.post("/login")
 def login(req: LoginRequest, response: Response):
+    
     result = db.validate_user(req.email, req.password)
     print(result)
     if "error" in result:
-        return {"error": result["error"]}
+        raise HTTPException(status_code=401, detail=result["error"])
     token = serializer.dumps({"user_id": result["user_id"], "email": req.email})
     response.set_cookie(
         key="session",
@@ -245,7 +249,6 @@ def import_worker(user_id, url):
         transcript = ""
         for attempt in range(MAX_RETRIES):
             try:
-                transcript = transcribe.transcribe_audio(file_path)
                 if transcript.strip() == "":
                     raise Exception("Empty transcript")
                 break
@@ -264,23 +267,23 @@ You are a content summarizer for short videos. Given the transcript below, produ
 Transcript:
 {transcript}
 
-Return your response in JSON format:
-{{
+Return your response in dict format:
   "summary": "...",
   "tags": ["...", "..."]
-}}
+
 """
         summary = ""
         for attempt in range(MAX_RETRIES):
             try:
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o",
                     messages=[
                         {"role": "system", "content": "You summarize TikTok transcripts into 2-3 lines."},
                         {"role": "user", "content": summary_tags_prompt}
                     ],
                 )
                 response= response.choices[0].message.content.strip()
+                print("Raw model response:", response)
                 data = json.loads(response)
                 summary = data["summary"]
                 tags= data["tags"]
@@ -352,10 +355,10 @@ async def delete_highlights(highlight_id: int, db=Depends(db.get_db), user=Depen
     return {"message": "Highlight deleted successfully"}
 
 @app.post("/collections/create")
-def create_collection(data: CollectionCreate):
+def create_collection(data: CollectionCreate,user=Depends(get_current_user)):
     try:
         collection_id = db.create_collection(
-            data.user_id, 
+            user["user_id"], 
             data.name,
             data.color,
             data.icon
@@ -366,17 +369,17 @@ def create_collection(data: CollectionCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.delete("/collections/delete/{user_id}/{collection_id}")
-def delete_collection(user_id: int, collection_id: int):
-    print(user_id,collection_id)
+def delete_collection(user_id: int, collection_id: int, user=Depends(get_current_user)):
+   
     try:
-        db.delete_collection(user_id, collection_id)
+        db.delete_collection(user["user_id"], collection_id)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 @app.get("/collections/{user_id}")
-def get_user_collections(user_id: int):
+def get_user_collections(user_id: int,user=Depends(get_current_user)):
     try:
-        collections = db.get_collections(user_id)
+        collections = db.get_collections(user["user_id"])
         return {"success": True, "collections": collections}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

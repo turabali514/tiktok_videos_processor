@@ -36,6 +36,7 @@ export function AuthForm({ mode, onModeChange, onSuccess }: AuthFormProps) {
     { text: "At least 8 characters", met: password.length >= 8 },
     { text: "One uppercase letter", met: /[A-Z]/.test(password) },
     { text: "One number", met: /\d/.test(password) },
+    {text: "One Specila character", met: /[^A-Za-z0-9]/.test(password)}
   ]
   
   const handleLoadingComplete = () => {
@@ -66,7 +67,8 @@ export function AuthForm({ mode, onModeChange, onSuccess }: AuthFormProps) {
 
     if (!response.ok) {
       const data = await response.json();
-      throw new Error(data.error || "Authentication failed");
+      console.log(data.error)
+      throw new Error(data.detail || "Authentication failed");
     }
     // For both login and signup, let the page component handle the redirect
     if(await waitForAuth())

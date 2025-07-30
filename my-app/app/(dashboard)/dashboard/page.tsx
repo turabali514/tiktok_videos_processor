@@ -11,9 +11,12 @@ import { AnimatedTitle } from "@/components/animated-title";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { ParallaxBackground } from "@/components/parallax-background";
 import { ScrollProgress } from "@/components/scroll-progress";
-import { EnhancedFloatingElements } from "@/components/enhanced-floating-elements";
+import { Button } from "@/components/ui/button"; 
+import { cn } from "@/lib/utils"
 import { useCollections } from "@/hooks/use-collections";
 import type { VideoData, Collection } from "@/types/collection";
+import { Menu, X,ChevronLeft, ChevronRight } from "lucide-react";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -28,6 +31,9 @@ export default function DashboardPage() {
   const [processingUrls, setProcessingUrls] = useState<string[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [videoStatus, setVideoStatus] = useState<Record<string, string>>({});
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const isMobile = useMediaQuery('(max-width: 640px)');
   const {
     collections,
     isLoading: collectionsLoading,
@@ -38,7 +44,10 @@ export default function DashboardPage() {
     fetchCollectionVideos,
     error: collectionsError
   } = useCollections(userId || 0);
-
+   const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed(prev => !prev);
+  };
+  
   const handleLogout = async () => {
     try {
       await fetch(`${BASE_URL}/logout`, {
@@ -86,6 +95,7 @@ export default function DashboardPage() {
   setIsLoading(true);
   setError(null);
   try {
+    console.log(userId)
     const response = await fetch(`${BASE_URL}/videos`, {
       method: "POST",
       credentials: "include",
@@ -111,7 +121,7 @@ export default function DashboardPage() {
         video?.video_sharecount || 0
       ),
       thumbnail: video?.file_path 
-        ? `http://localhost:8000${video.file_path.replace(/\\/g, '/')}`
+        ? `${BASE_URL}${video.file_path.replace(/\\/g, '/')}`
         : "/placeholder.svg",
       
       collectionIds: [], // Will be populated when added to collections
@@ -119,7 +129,6 @@ export default function DashboardPage() {
       transcript: video?.transcript || "",
       clean_url: video?.url || ""
     }));
-    
     setVideos(transformedVideos);
     // Always update collectionVideos when fetching all videos
     if (selectedCollectionId === -1 || !selectedCollectionId) {
@@ -171,6 +180,7 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch progress");
       
       const data = await res.json();
+      console.log(data)
 
       // Handle error case
       if (data.error) {
@@ -271,8 +281,36 @@ export default function DashboardPage() {
       <ScrollProgress />
       <ParallaxBackground />
       <DashboardHeader onLogout={handleLogout} />
+      
+      {/* Mobile sidebar toggle button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(
+          "fixed top-20 left-4 z-50 sm:show",
+          "bg-gray-800/80 backdrop-blur-sm border border-gray-700/50",
+          "text-gray-300 hover:text-white hover:bg-gray-700/80",
+          "transition-all duration-300"
+        )}
+        onClick={() => {setIsSidebarOpen(!isSidebarOpen);
+            // You'll need to detect mobile view
+      setIsSidebarCollapsed(prev => !prev);
+    
+        } }
+      >
+        {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+      </Button>
+
       <div className="flex h-[calc(100vh-64px)]">
-        <div className="w-80 flex-shrink-0 p-4 border-r border-gray-800 overflow-y-auto" style={{ height: "calc(100vh - 64px)" }}>
+        {/* Sidebar - Starts collapsed by default */}
+        <div className={cn(
+  "flex-shrink-0 border-r border-gray-800 overflow-y-auto transition-all duration-300 ease-in-out",
+  "fixed sm:relative z-40 bg-gray-900/90 backdrop-blur-sm",
+  "h-[calc(100vh-64px)]",
+  isSidebarOpen ? "left-0 w-64" : "-left-full w-0", // Mobile behavior
+  "sm:left-0", // Default collapsed width on desktop
+  !isSidebarCollapsed && "sm:w-64" // Expanded width on desktop when toggled
+)}>
           <CollectionSidebar
             userId={userId || 0}
             collections={collections}
@@ -282,40 +320,51 @@ export default function DashboardPage() {
             onDeleteCollection={deleteCollection}
             allVideos={videos}
             isLoading={collectionsLoading}
+            isMobile={!isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+            isCollapsed={isSidebarCollapsed}
           />
         </div>
         
-        <main className="relative z-10 flex" style={{ minHeight: "calc(100vh - 64px)" }}>
-          <div className="flex-1 overflow-auto">
-            <div className="max-w-7xl mx-auto px-4 py-8">
-              {error && (
-                <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
-                  {error}
-                </div>
-              )}
-              
-              <ScrollReveal direction="fade" className="text-center mb-16">
-                <AnimatedTitle />
-                <ScrollReveal delay={500} direction="up">
-                  <p className="text-gray-400 text-lg max-w-4xl mx-auto leading-relaxed">
-                    Import TikTok videos and unlock powerful{" "}
-                    <span className="text-transparent bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text font-semibold">
-                      AI-driven analytics
-                    </span>{" "}
-                    and insights with{" "}
-                    <span className="text-transparent bg-gradient-to-r from-pink-400 to-red-400 bg-clip-text font-semibold">
-                      cutting-edge technology
-                    </span>
-                  </p>
-                </ScrollReveal>
+        {/* Main content */}
+       <main className={cn(
+  "relative z-10 flex-1 overflow-auto",
+  "transition-all duration-300 ease-in-out",
+  isSidebarOpen ? "ml-0" : "ml-0",
+  isSidebarCollapsed ? "sm:ml-16" : "sm:ml-16" // Adjust margin based on collapsed state
+)} style={{ minHeight: "calc(100vh - 64px)" }}>
+          <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8">
+            {error && (
+              <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
+                {error}
+              </div>
+            )}
+            
+            <div className="text-center mb-12">
+              <h1 className="text-3xl font-bold text-white mb-2">TikTok Insights</h1>
+              <p className="text-gray-400 text-lg">Video Analytics Platform</p>
+            </div>
+
+            <div className="max-w-3xl mx-auto">
+              <ScrollReveal direction="fade" className="text-center mb-12">
+                <p className="text-gray-400 text-lg leading-relaxed">
+                  Import TikTok videos and unlock powerful{" "}
+                  <span className="text-transparent bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text font-semibold">
+                    AI-driven analytics
+                  </span>{" "}
+                  and insights with{" "}
+                  <span className="text-transparent bg-gradient-to-r from-pink-400 to-red-400 bg-clip-text font-semibold">
+                    cutting-edge technology
+                  </span>
+                </p>
               </ScrollReveal>
 
-              <div id="import-section">
+              <div id="import-section" className="mb-12">
                 <EnhancedVideoImport onImport={handleVideoImport} />
               </div>
 
               {videos.length > 0 && <GlobalVideoChat videos={videos} />}
-  
+
               <EnhancedVideoLibrary
                 videos={selectedCollectionId === -1 ? videos : collectionVideos}
                 isLoading={isLoading}
@@ -340,6 +389,7 @@ export default function DashboardPage() {
                       const updatedVideos = await fetchCollectionVideos(collectionId);
                       setCollectionVideos(updatedVideos);
                     }
+                    
                     await fetchUserVideos();
                   } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to remove from collection");
@@ -355,7 +405,7 @@ export default function DashboardPage() {
                       icon: data.icon,
                     });
                   } catch (err) {
-                    console.error("Failed to create collection:", err);
+                    setError(err instanceof Error ? err.message : "Collection Already exists");
                     throw err;
                   }
                 }}
@@ -366,14 +416,6 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
-      <EnhancedFloatingElements
-        onImportClick={() => {
-          const importSection = document.getElementById("import-section");
-          if (importSection) {
-            importSection.scrollIntoView({ behavior: "smooth" });
-          }
-        }}
-      />
     </div>
   );
 }

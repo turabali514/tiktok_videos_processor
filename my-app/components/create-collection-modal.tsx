@@ -69,6 +69,7 @@ export function CreateCollectionModal({ userId, onCreateCollection, children }: 
     e.preventDefault()
     if (!formData.name.trim()) return
     setIsLoading(true)
+    console.log(userId)
     try {
       await onCreateCollection({
         user_id: userId,

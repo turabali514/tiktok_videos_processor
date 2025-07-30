@@ -43,15 +43,6 @@ export function GlobalVideoChat({ videos }: GlobalVideoChatProps) {
   const [inputMessage, setInputMessage] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const [isMinimized, setIsMinimized] = useState(true)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
 
   const handleSendMessage = async () => {
   if (!inputMessage.trim()) return
@@ -63,7 +54,7 @@ export function GlobalVideoChat({ videos }: GlobalVideoChatProps) {
     timestamp: new Date(),
   }
 
-  setMessages((prev) => [...prev, userMessage])
+  setMessages([userMessage])
   const currentQuery = inputMessage
   setInputMessage("")
   setIsTyping(true)
@@ -103,7 +94,7 @@ export function GlobalVideoChat({ videos }: GlobalVideoChatProps) {
       timestamp: new Date(),
     }
 
-    setMessages((prev) => [...prev, aiMessage]);
+    setMessages([userMessage, aiMessage])
   } catch (error) {
     console.error('API Error:', error);
     
@@ -141,13 +132,6 @@ export function GlobalVideoChat({ videos }: GlobalVideoChatProps) {
     }
   }
 
-  const suggestedQueries = [
-    "Give me an overview of my video performance",
-    "Which are my best performing videos?",
-    "How can I improve my content strategy?",
-    "Show me trends and patterns in my content",
-  ]
-
   return (
     <ScrollReveal direction="up" className="mb-8">
       <Card className="bg-gray-900/50 backdrop-blur-sm border-red-500/20 hover:border-red-500/40 transition-all duration-300 relative overflow-hidden group">
@@ -184,27 +168,7 @@ export function GlobalVideoChat({ videos }: GlobalVideoChatProps) {
 
         {!isMinimized && (
           <CardContent className="relative z-10">
-            {/* Suggested queries */}
-            {messages.length <= 1 && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-400 mb-3">Try asking:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {suggestedQueries.map((query, index) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setInputMessage(query)}
-                      className="text-left justify-start h-auto p-3 bg-gray-800/30 border-gray-700 text-gray-300 hover:bg-gray-800/50 hover:text-white hover:border-red-500/30 transition-all duration-300"
-                    >
-                      <MessageCircle className="w-4 h-4 mr-2 flex-shrink-0 text-red-400" />
-                      <span className="text-xs">{query}</span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
+  
             {/* Chat messages */}
             <div className="h-64 overflow-y-auto mb-4 space-y-4 custom-scrollbar">
               {messages.map((message, index) => (
@@ -272,7 +236,6 @@ export function GlobalVideoChat({ videos }: GlobalVideoChatProps) {
                   </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
             </div>
 
             {/* Input area */}

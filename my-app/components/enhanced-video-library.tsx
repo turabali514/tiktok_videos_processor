@@ -10,6 +10,8 @@ import { VideoChatModal } from "./video-chat-modal"
 import { VideoSummaryModal } from "./video-summary-modal"
 import { VideoCollectionManager } from "./video-collection-manager"
 import type { VideoData, Collection } from "@/types/collection"
+import useDynamicColumns from '@/hooks/use-column-count';
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 interface VideoLibraryProps {
   videos: VideoData[]
@@ -22,6 +24,7 @@ interface VideoLibraryProps {
   onRefetchVideos: () => Promise<void>
   onFetchCollectionVideos?: (collectionId: number) => Promise<VideoData[]> 
   videoStatus?: Record<string, string>;
+  
 }
 
 export function EnhancedVideoLibrary({
@@ -40,6 +43,14 @@ export function EnhancedVideoLibrary({
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null)
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null)
+  const { containerRef, columns } = useDynamicColumns(350);
+    const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+    gap: '1.5rem',
+    width: '100%'
+  };
+   console.log('Rendering with columns:', columns);
   // Only poll if there are videos processing
   const processingVideos = videos.filter(video => {
     const status = videoStatus[video.id] || "";
@@ -60,7 +71,7 @@ export function EnhancedVideoLibrary({
 
   return (
     <ScrollReveal direction="up">
-      <div className="space-y-8">
+      <div ref={containerRef} className="w-full px-4">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -83,7 +94,12 @@ export function EnhancedVideoLibrary({
         </div>
 
         {/* Video Grid - Using CSS Grid with auto-fit for better responsive control */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gap: '1.5rem',
+          width: '100%'
+        }}>
           {displayVideos.map((video, index) => {
             if (!video?.id) return null // Skip invalid videos
 
@@ -94,15 +110,15 @@ export function EnhancedVideoLibrary({
               <div key={video.id} className="w-full">
                 <ScrollReveal delay={index * 80} direction="up">
                   <Card
-                    className="bg-gray-800/40 backdrop-blur-sm border-gray-700/50 hover:bg-gray-800/60 transition-all duration-500 transform hover:scale-[1.02] hover:-translate-y-1 group cursor-pointer relative overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-red-500/10 w-full"
+                    className="bg-gray-800/40 backdrop-blur-sm border-gray-700/50 hover:bg-gray-800/60 transition-all duration-500 transform hover:scale-[1.02] hover:-translate-y-1 group cursor-pointer relative overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-red-500/10 h-full flex flex-col"
                     onClick={() => setSelectedVideo(String(video.id))}
                     onMouseEnter={() => setHoveredVideo(String(video.id))}
                     onMouseLeave={() => setHoveredVideo(null)}
                   >
-                    <CardContent className="p-0 relative">
+                    <CardContent className="p-0 flex-1 flex flex-col">
                       {/* Video Thumbnail Container */}
-                      <div className="relative aspect-[3/4] bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden">
-                        <VideoPlayer src={video.thumbnail || ""} />
+                      <div className="relative aspect-[3/4] bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden w-full min-h-[180px]">
+                        <VideoPlayer src={video.thumbnail || ""} className="absolute inset-0 w-full h-full" />
               
                         {/* Collection Manager Button */}
                         <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -157,13 +173,13 @@ export function EnhancedVideoLibrary({
                       </div>
 
                       {/* Video Info */}
-                      <div className="p-4 flex-1 flex flex-col min-h-[180px]">
+                      <div className="p-4 flex-1 flex flex-col min-h-[180px] overflow-visible">
                         <h4 className="font-semibold text-white text-sm line-clamp-2 leading-relaxed mb-3">
                           {video.title || "Untitled Video"}
                         </h4>
 
                         {/* Stats Grid */}
-                        <div className="grid grid-cols-2 gap-2 text-xs mb-4">
+                        <div className="grid grid-cols-2 gap-2 text-xs mb-4 overflow-visible">
                           <div className="flex items-center gap-2 text-gray-400 hover:text-red-400 transition-colors duration-300">
                             <Eye className="w-3.5 h-3.5 flex-shrink-0" />
                             <span className="font-medium truncate">
@@ -199,7 +215,7 @@ export function EnhancedVideoLibrary({
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="mt-auto grid grid-cols-2 gap-2">
+                        <div className="mt-auto grid grid-cols-2 gap-2 overflow-visible">
                           <VideoChatModal videoId={video.id} videoTitle={video.title || "Untitled"}>
                             <Button
                               variant="ghost"

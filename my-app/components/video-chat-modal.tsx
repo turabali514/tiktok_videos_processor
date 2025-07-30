@@ -35,15 +35,7 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
   const [isTyping, setIsTyping] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [animateIn, setAnimateIn] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+  
 
   const handleSendMessage = async () => {
   if (!inputMessage.trim()) return
@@ -55,7 +47,7 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
     timestamp: new Date(),
   }
 
-  setMessages((prev) => [...prev, userMessage])
+  setMessages([userMessage])
   setInputMessage("")
   setIsTyping(true)
 
@@ -86,7 +78,7 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
       timestamp: new Date(),
     }
 
-    setMessages((prev) => [...prev, aiMessage]);
+    setMessages([userMessage, aiMessage]);
   } catch (error) {
     console.error('Error fetching response:', error);
     const errorMessage: Message = {
@@ -200,7 +192,6 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
 
           <div className="p-4 border-t border-gray-800 flex-shrink-0">

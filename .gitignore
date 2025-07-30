@@ -209,5 +209,5 @@ __marimo__/
 .conda
 
 #db and videos
-db/
-videos/
+db/*
+videos/*

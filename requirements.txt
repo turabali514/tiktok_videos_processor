@@ -19,3 +19,6 @@ websockets==15.0.1
 beautifulsoup4==4.13.4
 streamlit-js-eval==0.1.7
 itsdangerous==2.2.0
+pydub==0.25.1
+moviepy==2.2.1
+ffmpeg==1.4

@@ -1,8 +1,5 @@
-# apply_migrations.ps1
-# Assumes this is at: project/db/scripts/
-# .env is two levels up (project/.env)
 
-$envFilePath = Resolve-Path "..\..\.env"  # adjust if your .env is elsewhere
+$envFilePath = Resolve-Path "..\..\.secrets.toml"  # adjust if your .env is elsewhere
 if (-Not (Test-Path $envFilePath)) {
     Write-Error "Cannot find .env at $envFilePath"
     exit 1
@@ -64,5 +61,10 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "migration3 failed"
     exit 1
 }
-
+Write-Output "Running migration4 (add confidence_score)..."
+psql -h localhost -U tiktok_user -d tiktok_processor -f "../migrations/migration4_add_confidence_score.sql"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "migration4 failed"
+    exit 1
+}
 Write-Output "All migrations applied successfully."

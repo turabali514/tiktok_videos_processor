@@ -373,7 +373,18 @@ Return your response in dict format:
         video_id = db.add_video_record(url, file_path, transcript, metadata, summary, tags)
         db.link_user_video(user_id, video_id)
         logger.info(f"Successfully added video record for URL: {url}")
-
+        for title, text, score in zip(
+    data["hooks"]["hook-title"],
+    data["hooks"]["hook-text"],
+    data["hooks"]["confidence-score"]
+):highlight_id = add_highlight(
+        user_id=user_id,
+        video_id=video_id,
+        title=title,
+        text=text,
+        color="yellow",
+        confidence_score=float(score)
+    )
         try:
             add_new_transcript(transcript, video_id=video_id)
             logger.info(f"Added transcript to vector DB for video ID: {video_id}")

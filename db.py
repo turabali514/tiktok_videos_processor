@@ -201,14 +201,14 @@ def get_transcript(video_id: int) -> str:
     return result["transcript"] if result else ""
 
 # Highlight-related functions
-def add_highlight(user_id: int, video_id: int, title: str, text: str, color: str) -> int:
+def add_highlight(user_id: int, video_id: int, title: str, text: str, color: str, confidence_score: float) -> int:
     """Add a highlight"""
     result = execute_query(
-        "INSERT INTO highlights (user_id, video_id, title, text, color) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-        (user_id, video_id, title, text, color),
+        "INSERT INTO highlights (user_id, video_id, title, text, color, confidence_score) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        (user_id, video_id, title, text, color, confidence_score),
         fetch=True
     )
-    logger.info(f"Added highlight {result['id']} for video {video_id}")
+    logger.info(f"Added highlight {result['id']} for video {video_id} with confidence {confidence_score}")
     return result['id']
 
 def get_highlights_for_video(user_id: int, video_id: int) -> List[Dict]:
@@ -222,14 +222,14 @@ def get_highlights_for_video(user_id: int, video_id: int) -> List[Dict]:
     return highlights
 
 def update_highlight(highlight_id: int, title: str, color: str) -> bool:
-    """Update a highlight"""
+    """Update a highlight and mark as user-edited"""
     rows = execute_query(
-        "UPDATE highlights SET title = %s, color = %s WHERE id = %s",
+        "UPDATE highlights SET title = %s, color = %s, confidence_score = 2.0 WHERE id = %s",
         (title, color, highlight_id)
     )
     success = rows > 0
     if success:
-        logger.info(f"Updated highlight {highlight_id}")
+        logger.info(f"Updated highlight {highlight_id} (user-edited, confidence = 2.0)")
     else:
         logger.warning(f"Highlight not found for update: {highlight_id}")
     return success

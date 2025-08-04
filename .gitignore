@@ -210,4 +210,8 @@ __marimo__/
 
 #db and videos
 db/*
+!db/migrations
+!db/scripts
 videos/*
+!videos/temp
+.secrets.toml

@@ -34,65 +34,6 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
   const [isTyping, setIsTyping] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [animateIn, setAnimateIn] = useState(false)
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const dialogContentRef = useRef<HTMLDivElement>(null)
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    const handleViewportChange = () => {
-      if (!window.visualViewport) return
-      
-      // Check if keyboard is visible (viewport height reduced significantly)
-      const isKeyboardNowVisible = window.visualViewport.height < window.innerHeight * 0.6
-      setIsKeyboardVisible(isKeyboardNowVisible)
-
-      if (isKeyboardNowVisible && dialogContentRef.current) {
-        // Adjust dialog height to fit above keyboard
-        const newHeight = window.visualViewport.height-100 // Leave some margin
-        dialogContentRef.current.style.height = `${newHeight}px`
-        
-        // Scroll to input after a small delay to allow for resize
-        setTimeout(() => {
-          inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 100)
-      } else if (dialogContentRef.current) {
-        // Reset to original height when keyboard hides
-        dialogContentRef.current.style.height = '85vh'
-      }
-    }
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportChange)
-    }
-
-    return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleViewportChange)
-      }
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      // Focus on input when modal opens
-      inputRef.current.focus()
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    // Only scroll to bottom when new messages arrive, not on initial render
-    if (messages.length > 1) {
-      scrollToBottom()
-    }
-  }, [messages])
-
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return
 
@@ -103,7 +44,7 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
       timestamp: new Date(),
     }
 
-    setMessages(prev => [...prev, userMessage])
+    setMessages([userMessage])
     setInputMessage("")
     setIsTyping(true)
 
@@ -134,7 +75,7 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
         timestamp: new Date(),
       }
 
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages([userMessage, aiMessage]);
     } catch (error) {
       console.error('Error fetching response:', error);
       const errorMessage: Message = {
@@ -170,7 +111,6 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent
-        ref={dialogContentRef}
         className={` dialog-content
           fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 
           w-[95vw] max-w-[800px]
@@ -180,7 +120,6 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
           ${animateIn ? "scale-100 opacity-100" : "scale-95 opacity-0"}
           p-0 gap-0 overflow-hidden
           flex flex-col
-          ${isKeyboardVisible ? 'bottom-[env(keyboard-height,50%)]' : ''}
         `}
       >
         <DialogHeader className="border-b border-gray-800 px-4 py-3 flex-shrink-0">
@@ -252,13 +191,11 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
 
           <div className="p-4 border-t border-gray-800 flex-shrink-0">
             <div className="flex gap-3">
               <Input
-                ref={inputRef}
                 placeholder="Ask about video performance..."
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}

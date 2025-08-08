@@ -171,7 +171,7 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent
         ref={dialogContentRef}
-        className={`
+        className={` dialog-content
           fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 
           w-[95vw] max-w-[800px]
           h-[85vh] max-h-[800px]
@@ -182,13 +182,6 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
           flex flex-col
           ${isKeyboardVisible ? 'bottom-[env(keyboard-height,50%)]' : ''}
         `}
-        style={{
-          // Mobile-specific adjustments
-          '@media (max-width: 640px)': {
-            maxHeight: isKeyboardVisible ? '70vh' : '85vh',
-            bottom: isKeyboardVisible ? '10%' : 'auto',
-          }
-        }}
       >
         <DialogHeader className="border-b border-gray-800 px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between">

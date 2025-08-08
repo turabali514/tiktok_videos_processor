@@ -90,20 +90,6 @@ export function VideoPlayer({ src, className }: VideoPlayerProps & { className?:
     }
   }, [])
 
-  // Control visibility logic
-  useEffect(() => {
-    let timer: NodeJS.Timeout
-    
-    if (isPlaying && !isHovered) {
-      timer = setTimeout(() => {
-        setShowControls(false)
-      })
-    } else {
-      setShowControls(true)
-    }
-
-    return () => clearTimeout(timer)
-  }, [isHovered, isPlaying])
 
   return (
    <div 

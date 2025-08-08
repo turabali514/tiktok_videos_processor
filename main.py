@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from rag import ask,ask_from_all_videos
 from dotenv import load_dotenv
 from typing import Optional
+import re
 load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -28,7 +29,8 @@ executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000",  # frontend dev environment
-        "https://1d55226dfa61.ngrok-free.app"  # your actual frontend via ngrok
+        "https://www.askskylar.ai",
+        "https://tiktokcartelle.techaiapps.com"
         ], 
     allow_credentials=True,                  
     allow_methods=["*"],
@@ -113,11 +115,9 @@ def signup(req: SignupRequest):
         return {"user_id": user, "detail": "Registeration SUccessful, Login now!"}
     else: 
         raise HTTPException(status_code=404, detail="User already exists")
-    
 # ✅ Secure login: Set cookie
 @app.post("/login")
 def login(req: LoginRequest, response: Response):
-    
     result = db.validate_user(req.email, req.password)
     print(result)
     if "error" in result:
@@ -126,8 +126,8 @@ def login(req: LoginRequest, response: Response):
     response.set_cookie(
         key="session",
         value=token,
-        httponly=True,
-        samesite="None",
+        httponly=False,
+        samesite="Lax",
         secure=True,
         path="/",
     )
@@ -249,8 +249,10 @@ def import_worker(user_id, url):
         transcript = ""
         for attempt in range(MAX_RETRIES):
             try:
+                transcript = transcribe.transcribe_audio(file_path)
                 if transcript.strip() == "":
                     raise Exception("Empty transcript")
+                print(transcript)
                 break
             except Exception as e:
                 print(f"[Transcription Retry {attempt+1}] Error: {e}")
@@ -262,7 +264,7 @@ def import_worker(user_id, url):
 You are a content summarizer for short videos. Given the transcript below, produce:
 
 1. A concise 2-3 sentence summary of what the video is about.
-2. A list of 10 relevant tags (hashtags or keywords) describing the video content with the "#" format.
+2. A list of 10 relevant tags (hashtags or keywords) describing the video content with the # format.
 
 Transcript:
 {transcript}
@@ -275,6 +277,7 @@ Return your response in dict format:
         summary = ""
         for attempt in range(MAX_RETRIES):
             try:
+                print("calling llms")
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
@@ -283,7 +286,9 @@ Return your response in dict format:
                     ],
                 )
                 response= response.choices[0].message.content.strip()
-                print("Raw model response:", response)
+                response = re.search(r'```json(.*?)```', response, re.DOTALL)
+                response = response.group(1).strip()
+                print(response)
                 data = json.loads(response)
                 summary = data["summary"]
                 tags= data["tags"]
@@ -370,7 +375,6 @@ def create_collection(data: CollectionCreate,user=Depends(get_current_user)):
 
 @app.delete("/collections/delete/{user_id}/{collection_id}")
 def delete_collection(user_id: int, collection_id: int, user=Depends(get_current_user)):
-   
     try:
         db.delete_collection(user["user_id"], collection_id)
         return {"success": True}

@@ -1,5 +1,4 @@
 "use client"
-
 import type React from "react"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
@@ -9,11 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { FileText, Sparkles, Copy, Download, MessageSquare, Hash, Edit3, Trash2, X, Loader2 } from "lucide-react"
+import { FileText, Sparkles, Copy, Download, MessageSquare, Hash, Edit3, Trash2, X, Loader2 } from 'lucide-react'
 import { VideoData } from "@/types/collection"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
 interface VideoSummaryModalProps {
   video: VideoData
   children: React.ReactNode
@@ -52,6 +53,8 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
   const [highlightName, setHighlightName] = useState("")
   const [showHighlightsList, setShowHighlightsList] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+
   const queryClient = useQueryClient()
 
   const highlightColors = useMemo(() => [
@@ -69,12 +72,12 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
     queryFn: async (): Promise<ApiHighlight[]> => {
       try {
         const response = await axios.get(`${BASE_URL}/highlights/${video.id}`, {
-      withCredentials: true,  
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
-    setError(null)
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        })
+        setError(null)
         return response.data.highlights
       } catch (error) {
         if (axios.isAxiosError(error)) {
@@ -101,7 +104,6 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
         }
         return acc
       }, {} as Record<number, Highlight>)
-
       if (JSON.stringify(newHighlights) !== JSON.stringify(highlights)) {
         setHighlights(newHighlights)
       }
@@ -112,24 +114,22 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
 
   // Highlight mutations
   const addHighlightMutation = useMutation({
-    mutationFn: async (highlight: { 
+    mutationFn: async (highlight: {
       title: string
       text: string
       color: string
-      video_id: number 
+      video_id: number
     }) => {
       const response = await axios.post(`${BASE_URL}/highlights/`, highlight, {
-      withCredentials: true,  // This is the key addition
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
       return response.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-  queryKey: ['highlights', video.id] 
-})
+      queryClient.invalidateQueries({ queryKey: ['highlights', video.id] })
       setError(null)
     },
     onError: (error: unknown) => {
@@ -142,23 +142,21 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
   })
 
   const updateHighlightMutation = useMutation({
-    mutationFn: async ({ id, ...highlight }: { 
+    mutationFn: async ({ id, ...highlight }: {
       id: number
       title: string
-      color: string 
+      color: string
     }) => {
       const response = await axios.put(`${BASE_URL}/highlights/${id}`, highlight, {
-      withCredentials: true,  // This is the key addition
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
       return response.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-  queryKey: ['highlights', video.id] 
-})
+      queryClient.invalidateQueries({ queryKey: ['highlights', video.id] })
       setError(null)
     },
     onError: (error: unknown) => {
@@ -173,16 +171,14 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
   const deleteHighlightMutation = useMutation({
     mutationFn: async (id: number) => {
       await axios.delete(`${BASE_URL}/highlights/${id}`, {
-      withCredentials: true,  // This is the key addition
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-  queryKey: ['highlights', video.id] 
-})
+      queryClient.invalidateQueries({ queryKey: ['highlights', video.id] })
       setError(null)
     },
     onError: (error: unknown) => {
@@ -194,20 +190,36 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
     }
   })
 
-  // Event handlers
-  const handleTextSelection = useCallback((sectionId: string) => {
-    const selection = window.getSelection()
-    if (selection && selection.toString().trim()) {
-      const selectedText = selection.toString().trim()
-      setPendingHighlight({
-        text: selectedText,
-        sectionId,
-      })
-      setShowNameDialog(true)
-      setHighlightName("")
-      selection.removeAllRanges()
+  // Handle text selection for both mouse and touch events
+  const handleSelection = useCallback((e: React.MouseEvent | React.TouchEvent, sectionId: string) => {
+    e.preventDefault();
+    
+    // On touch devices, add a small delay to allow the selection to settle
+    if ('touches' in e) {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        processSelection(selection, sectionId);
+      }, 100);
+    } else {
+      const selection = window.getSelection();
+      processSelection(selection, sectionId);
     }
-  }, [])
+  }, []);
+
+  const processSelection = (selection: Selection | null, sectionId: string) => {
+    if (selection && selection.toString().trim() && !(document.activeElement as HTMLElement)?.closest('mark')) {
+      const selectedText = selection.toString().trim();
+      if (selectedText) {
+        setPendingHighlight({
+          text: selectedText,
+          sectionId,
+        });
+        setShowNameDialog(true);
+        setHighlightName("");
+        selection.removeAllRanges();
+      }
+    }
+  };
 
   const confirmHighlight = useCallback(async () => {
     if (pendingHighlight && highlightName.trim()) {
@@ -284,7 +296,6 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
     
     let highlightedText = text
     const sectionHighlights = Object.values(highlights).filter((h) => h.sectionId === sectionId)
-
     sectionHighlights.forEach((highlight) => {
       const colorClass = highlightColors.find((c) => c.color === highlight.color)?.class || "bg-red-300/20 border-red-300/30 text-red-100"
       const regex = new RegExp(`(${highlight.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
@@ -292,7 +303,7 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
         regex,
         `<span class="relative inline-block group">
           <mark 
-            class="${colorClass} px-1.5 py-0.5 rounded-md border transition-all duration-200 hover:scale-105 cursor-pointer" 
+            class="${colorClass} px-1.5 py-0.5 rounded-md border transition-all duration-200 hover:scale-105 cursor-pointer"
             data-highlight-id="${highlight.id}"
           >${highlight.text}</mark>
           <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-md shadow-lg whitespace-nowrap z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none border border-gray-600">
@@ -302,7 +313,6 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
         </span>`
       )
     })
-
     return highlightedText
   }, [highlights, highlightColors])
 
@@ -320,7 +330,6 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
         handleHighlightClick(highlightId)
       }
     }
-
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
   }, [handleHighlightClick])
@@ -337,36 +346,34 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
   }, [])
 
   const downloadTranscript = useCallback(() => {
-  if (!video.transcript) return;
-  
-  const safeTitle = (video.title || 'transcript').toString();
-  const blob = new Blob([video.transcript], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${safeTitle}_transcript.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}, [video.transcript, video.title]);
+    if (!video.transcript) return;
+    const safeTitle = (video.title || 'transcript').toString();
+    const blob = new Blob([video.transcript], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeTitle}_transcript.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [video.transcript, video.title]);
 
-const exportHighlights = useCallback(() => {
-  const highlightsList = Object.values(highlights)
-    .map((h) => `${h.name}: "${h.text}"`)
-    .join("\n");
-
-  const safeTitle = (video.title || 'highlights').toString();
-  const blob = new Blob([highlightsList], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${safeTitle}_highlights.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}, [highlights, video.title]);
+  const exportHighlights = useCallback(() => {
+    const highlightsList = Object.values(highlights)
+      .map((h) => `${h.name}: "${h.text}"`)
+      .join("\n");
+    const safeTitle = (video.title || 'highlights').toString();
+    const blob = new Blob([highlightsList], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeTitle}_highlights.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [highlights, video.title]);
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (open) {
@@ -382,62 +389,72 @@ const exportHighlights = useCallback(() => {
     <>
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogTrigger asChild>{children}</DialogTrigger>
-        <DialogContent className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[60vw] min-w-[300px] max-w-[1000px] h-[80vh] max-h-[90vh] bg-gray-900 border-red-500/20 text-white transition-all duration-300 ${animateIn ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}>
-          <DialogHeader className="border-b border-gray-800 pb-4 flex-shrink-0">
+        <DialogContent className={`
+          fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 
+          w-[95vw] max-w-[800px]
+          h-[85vh] max-h-[800px]
+          bg-gray-900 border-red-500/20 text-white
+          transition-all duration-300
+          ${animateIn ? "scale-100 opacity-100" : "scale-95 opacity-0"}
+          p-0 gap-0 overflow-hidden
+          flex flex-col
+        `}>
+          <DialogHeader className="border-b border-gray-800 pb-2 flex-shrink-0 px-4 py-3">
             <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent mb-2 flex items-center gap-2">
-                  <MessageSquare className="w-6 h-6 text-red-400" />
-                  <span className="animate-in slide-in-from-left-2 duration-300">Video Summary & Transcript</span>
+              <div className="flex-1 min-w-0">
+                <DialogTitle className="text-lg font-bold bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  <span className="animate-in slide-in-from-left-2 duration-300 break-words overflow-hidden min-w-0">
+                    Video Summary & Transcript
+                  </span>
                 </DialogTitle>
-                <p className="text-gray-400 text-base animate-in slide-in-from-left-3 duration-300 delay-100">
-                  {video.title}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowHighlightsList(!showHighlightsList)}
-                  className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10 h-8 px-3 text-xs"
-                >
-                  <Edit3 className="w-3 h-3 mr-1" />
-                  Highlights ({Object.keys(highlights).length})
-                </Button>
               </div>
             </div>
+            <div className="flex justify-start mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHighlightsList(!showHighlightsList)}
+                className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10 h-8 px-3 text-xs"
+              >
+                <Edit3 className="w-3 h-3 mr-1" />
+                Highlights ({Object.keys(highlights).length})
+              </Button>
+            </div>
           </DialogHeader>
-
-          <div className="flex flex-col h-[calc(100%-80px)] min-h-0">
+          
+          <div className="flex flex-col h-full min-h-0 overflow-hidden">
             <Tabs defaultValue="summary" className="flex flex-col h-full min-h-0">
-              <TabsList className="grid w-full grid-cols-2 bg-gray-800 border-gray-700 flex-shrink-0">
-                <TabsTrigger
-                  value="summary"
-                  className="data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  AI Summary & Tags
-                </TabsTrigger>
-                <TabsTrigger
-                  value="transcript"
-                  className="data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Transcript
-                </TabsTrigger>
-              </TabsList>
-
-              <div className="flex-1 min-h-0 overflow-y-auto px-4 custom-scrollbar">
+              <div className="overflow-x-auto px-4">
+                <TabsList className="w-full bg-gray-800 border-gray-700 flex-shrink-0 mt-1">
+                  <TabsTrigger
+                    value="summary"
+                    className="data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400 text-xs sm:text-sm py-2 flex-1"
+                  >
+                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <span className="truncate">Summary & Tags</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="transcript"
+                    className="data-[state=active]:bg-red-500/20 data-[state=active]:text-red-400 text-xs sm:text-sm py-2 flex-1"
+                  >
+                    <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <span className="truncate">Transcript</span>
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+              
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 custom-scrollbar overflow-x-hidden">
                 {error && (
-                  <div className="mb-4 p-3 bg-red-900/30 rounded-lg border border-red-700/50">
+                  <div className="mb-3 p-3 bg-red-900/30 rounded-lg border border-red-700/50">
                     <p className="text-xs text-red-300">{error}</p>
                   </div>
                 )}
 
                 {showHighlightsList && (
-                  <div className="mb-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-white flex items-center gap-2">
+                  <div className="mb-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-white flex items-center gap-2 text-sm sm:text-base">
                         <Edit3 className="w-4 h-4 text-purple-400" />
                         Your Highlights
                       </h3>
@@ -453,30 +470,30 @@ const exportHighlights = useCallback(() => {
                       </Button>
                     </div>
                     {isLoadingHighlights ? (
-                      <div className="flex justify-center py-4">
+                      <div className="flex justify-center py-3">
                         <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                       </div>
                     ) : Object.values(highlights).length === 0 ? (
-                      <p className="text-sm text-gray-400 text-center py-4">No highlights yet. Select text to create one.</p>
+                      <p className="text-sm text-gray-400 text-center py-3">No highlights yet. Select text to create one.</p>
                     ) : (
-                      <div className="space-y-3 max-h-60 overflow-y-auto">
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
                         {Object.values(highlights).map((highlight) => (
                           <div 
                             key={highlight.id}
                             className="p-3 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:border-gray-500/50 transition-colors"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div>
+                              <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                   <div 
-                                    className="w-3 h-3 rounded-full border border-white/30" 
+                                    className="w-3 h-3 rounded-full border border-white/30 flex-shrink-0"
                                     style={{ backgroundColor: highlight.color }}
                                   />
-                                  <p className="font-medium text-white">{highlight.name}</p>
+                                  <p className="font-medium text-white text-sm truncate">{highlight.name}</p>
                                 </div>
-                                <p className="text-sm text-gray-300 italic">"{highlight.text}"</p>
+                                <p className="text-sm text-gray-300 italic break-words">"{highlight.text}"</p>
                               </div>
-                              <div className="flex gap-1">
+                              <div className="flex gap-1 flex-shrink-0">
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -503,12 +520,12 @@ const exportHighlights = useCallback(() => {
                 )}
 
                 <TabsContent value="summary" className="m-0 h-full">
-                  <div className="space-y-6 py-4">
+                  <div className="space-y-3 pt-3">
                     <Card className="bg-gray-800/50 border-gray-700 w-full">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="text-lg text-white flex items-center gap-2">
-                          <Sparkles className="w-5 h-5 text-red-400" />
-                          AI-Generated Summary
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+                        <CardTitle className="text-base text-white flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
+                          Video Summary
                         </CardTitle>
                         <Button
                           variant="outline"
@@ -521,9 +538,9 @@ const exportHighlights = useCallback(() => {
                           {copiedText === "summary" ? "Copied!" : "Copy"}
                         </Button>
                       </CardHeader>
-                      <CardContent className="break-words overflow-wrap-anywhere">
+                      <CardContent className="break-words overflow-wrap-anywhere pt-0 pb-3">
                         <div className="prose prose-invert max-w-none">
-                          <div className="text-gray-300 leading-relaxed">
+                          <div className="text-gray-300 leading-relaxed text-sm sm:text-base">
                             {video.summary || "No summary available"}
                           </div>
                         </div>
@@ -531,10 +548,10 @@ const exportHighlights = useCallback(() => {
                     </Card>
 
                     <Card className="bg-gray-800/50 border-gray-700 w-full">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="text-lg text-white flex items-center gap-2">
-                          <Hash className="w-5 h-5 text-red-400" />
-                          Generated Tags
+                      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+                        <CardTitle className="text-base text-white flex items-center gap-2">
+                          <Hash className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
+                          Video Tags
                         </CardTitle>
                         <Button
                           variant="outline"
@@ -546,37 +563,23 @@ const exportHighlights = useCallback(() => {
                           {copiedText === "tags" ? "Copied!" : "Copy All"}
                         </Button>
                       </CardHeader>
-                      <CardContent className="break-words overflow-wrap-anywhere">
-                        <div className="space-y-6">
-                          <div>
-                            <p className="text-gray-300 leading-relaxed mb-4">
-                              AI-generated hashtags optimized for maximum reach and engagement based on your video
-                              content and trending patterns.
-                            </p>
-                          </div>
-                          <div className="space-y-4">
-                            <h4 className="font-semibold text-white flex items-center gap-2">
-                              <Hash className="w-4 h-4 text-pink-400" />
-                              Recommended Hashtags:
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                              {(video.tags || []).map((tag, index) => (
-                                <Badge
-                                  key={index}
-                                  variant="outline"
-                                  className={`border-red-500/30 text-red-300 bg-red-500/10 hover:bg-red-500/20 cursor-pointer transition-all duration-300 hover:scale-105 ${
-                                    index < 3
-                                      ? "border-pink-500/30 text-pink-300 bg-pink-500/10 hover:bg-pink-500/20"
-                                      : ""
-                                  }`}
-                                  onClick={() => copyToClipboard(tag, `tag-${index}`)}
-                                >
-                                  {tag}
-                                  {copiedText === `tag-${index}` && <span className="ml-1 text-xs">✓</span>}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
+                      <CardContent className="break-words overflow-wrap-anywhere pt-0 pb-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {(video.tags || []).map((tag, index) => (
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              className={`border-red-500/30 text-red-300 bg-red-500/10 hover:bg-red-500/20 cursor-pointer transition-all duration-300 hover:scale-105 text-xs sm:text-sm ${
+                                index < 3
+                                  ? "border-pink-500/30 text-pink-300 bg-pink-500/10 hover:bg-pink-500/20"
+                                  : ""
+                              }`}
+                              onClick={() => copyToClipboard(tag, `tag-${index}`)}
+                            >
+                              {tag}
+                              {copiedText === `tag-${index}` && <span className="ml-1 text-xs">?</span>}
+                            </Badge>
+                          ))}
                         </div>
                       </CardContent>
                     </Card>
@@ -584,28 +587,28 @@ const exportHighlights = useCallback(() => {
                 </TabsContent>
 
                 <TabsContent value="transcript" className="m-0 h-full">
-                  <div className="py-4">
-                    <div className="mb-4 p-3 bg-gray-800/30 rounded-lg border border-gray-700/50">
+                  <div className="pt-3">
+                    <div className="mb-3 p-3 bg-gray-800/30 rounded-lg border border-gray-700/50">
                       <p className="text-xs text-gray-400 flex items-center gap-2">
-                        <Sparkles className="w-3 h-3 text-pink-400" />
+                        <Sparkles className="w-3 h-3 text-pink-400 flex-shrink-0" />
                         <strong>Tip:</strong> Select any text to highlight it and give it a custom name. Hover over
                         highlights to see their names, or click to edit them.
                       </p>
                     </div>
 
                     <Card className="bg-gray-800/50 border-gray-700 w-full">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="text-lg text-white flex items-center gap-2">
-                          <FileText className="w-5 h-5 text-red-400" />
+                      <CardHeader className="flex flex-col gap-2 sm:flex-row items-start sm:items-center justify-between pb-3">
+                        <CardTitle className="text-base text-white flex items-center gap-2">
+                          <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
                           Video Transcript
                         </CardTitle>
-                        <div className="flex items-center gap-2">
-                          <div className="flex gap-1.5">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+                          <div className="flex gap-1 flex-wrap">
                             {highlightColors.map((colorOption) => (
                               <button
                                 key={colorOption.color}
                                 onClick={() => setSelectedColor(colorOption.color)}
-                                className={`w-7 h-7 rounded-lg border-2 transition-all duration-200 hover:scale-110 ${
+                                className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg border-2 transition-all duration-200 hover:scale-110 ${
                                   selectedColor === colorOption.color
                                     ? "border-white scale-110 shadow-lg"
                                     : "border-gray-500"
@@ -615,38 +618,36 @@ const exportHighlights = useCallback(() => {
                               />
                             ))}
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => video.transcript && copyToClipboard(video.transcript, "transcript")}
-                            className="border-red-500/30 text-red-300 hover:bg-red-500/10 h-8 px-3 text-xs"
-                            disabled={!video.transcript}
-                          >
-                            <Copy className="w-3 h-3 mr-1" />
-                            {copiedText === "transcript" ? "Copied!" : "Copy"}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={downloadTranscript}
-                            className="border-pink-500/30 text-pink-300 hover:bg-pink-500/10 bg-transparent h-8 px-3 text-xs"
-                            disabled={!video.transcript}
-                          >
-                            <Download className="w-3 h-3 mr-1" />
-                            Download
-                          </Button>
+                          <div className="flex gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => video.transcript && copyToClipboard(video.transcript, "transcript")}
+                              className="border-red-500/30 text-red-300 hover:bg-red-500/10 h-8 px-3 text-xs"
+                              disabled={!video.transcript}
+                            >
+                              <Copy className="w-3 h-3 mr-1" />
+                              {copiedText === "transcript" ? "Copied!" : "Copy"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={downloadTranscript}
+                              className="border-pink-500/30 text-pink-300 hover:bg-pink-500/10 bg-transparent h-8 px-3 text-xs"
+                              disabled={!video.transcript}
+                            >
+                              <Download className="w-3 h-3 mr-1" />
+                              Download
+                            </Button>
+                          </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="break-words overflow-wrap-anywhere">
+                      <CardContent className="break-words overflow-wrap-anywhere pt-0 pb-3">
                         <div className="prose prose-invert max-w-none">
                           <div
-                            className="text-gray-300 leading-relaxed select-text cursor-text relative"
-                            onMouseUp={(e) => {
-                              const selection = window.getSelection()
-                              if (selection && selection.toString().trim() && !(e.target as HTMLElement).closest('mark')) {
-                                handleTextSelection("transcript")
-                              }
-                            }}
+                            className="text-gray-300 leading-relaxed select-text cursor-text relative text-sm sm:text-base break-words overflow-wrap-anywhere"
+                            onMouseUp={(e) => handleSelection(e, "transcript")}
+                            onTouchEnd={(e) => handleSelection(e, "transcript")}
                             dangerouslySetInnerHTML={{ __html: highlightedTranscript }}
                           />
                         </div>
@@ -661,10 +662,10 @@ const exportHighlights = useCallback(() => {
       </Dialog>
 
       <Dialog open={showNameDialog} onOpenChange={setShowNameDialog}>
-        <DialogContent className="w-[500px] bg-gray-900 border-red-500/20 text-white">
+        <DialogContent className="w-[95vw] sm:w-[500px] max-w-[500px] bg-gray-900 border-red-500/20 text-white">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
-              <Edit3 className="w-5 h-5 text-red-400" />
+            <DialogTitle className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+              <Edit3 className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
               Name Your Highlight
             </DialogTitle>
           </DialogHeader>
@@ -692,12 +693,12 @@ const exportHighlights = useCallback(() => {
             {pendingHighlight && (
               <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
                 <p className="text-xs text-gray-400 mb-1">Selected text:</p>
-                <p className="text-sm text-gray-300 italic">"{pendingHighlight.text}"</p>
+                <p className="text-sm text-gray-300 italic break-words">"{pendingHighlight.text}"</p>
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
               <p className="text-xs text-gray-400">Color:</p>
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 flex-wrap">
                 {highlightColors.map((colorOption) => (
                   <button
                     key={colorOption.color}
@@ -711,7 +712,7 @@ const exportHighlights = useCallback(() => {
                 ))}
               </div>
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col sm:flex-row justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={cancelHighlight}
@@ -736,10 +737,10 @@ const exportHighlights = useCallback(() => {
       </Dialog>
 
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-md bg-gray-900 border-blue-500/20 text-white">
+        <DialogContent className="w-[95vw] sm:w-[500px] max-w-[500px] bg-gray-900 border-blue-500/20 text-white">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
-              <Edit3 className="w-5 h-5 text-blue-400" />
+            <DialogTitle className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+              <Edit3 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
               Edit Highlight
             </DialogTitle>
           </DialogHeader>
@@ -767,12 +768,12 @@ const exportHighlights = useCallback(() => {
             {editingHighlight && (
               <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
                 <p className="text-xs text-gray-400 mb-1">Highlighted text:</p>
-                <p className="text-sm text-gray-300 italic">"{editingHighlight.text}"</p>
+                <p className="text-sm text-gray-300 italic break-words">"{editingHighlight.text}"</p>
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
               <p className="text-xs text-gray-400">Color:</p>
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 flex-wrap">
                 {highlightColors.map((colorOption) => (
                   <button
                     key={colorOption.color}
@@ -786,7 +787,7 @@ const exportHighlights = useCallback(() => {
                 ))}
               </div>
             </div>
-            <div className="flex justify-between">
+            <div className="flex flex-col sm:flex-row justify-between gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -807,7 +808,7 @@ const exportHighlights = useCallback(() => {
                   </>
                 )}
               </Button>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   variant="outline"
                   onClick={cancelEditHighlight}

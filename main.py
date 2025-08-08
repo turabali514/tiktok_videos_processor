@@ -8,12 +8,14 @@ logger = get_logger(settings.LOGS_PATH)
 openai_api_key = settings.OPENAI_API_KEY
 client = OpenAI(api_key=openai_api_key)
 
+
 from fastapi import FastAPI, HTTPException, Response, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from jobs_progress import create_job,get_job,update_job_progress,get_all_jobs
 from pydantic import BaseModel, EmailStr, field_validator
 from urllib.parse import urlparse
-import openai, re, transcribe, download, db, os, json, concurrent.futures, time
+import re, transcribe, download, db, os, json, concurrent.futures, time
 
 from create_vector_db import add_new_transcript
 import itsdangerous
@@ -204,45 +206,61 @@ def get_current_user(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/import_video")
-def import_video(req: ImportRequest, user=Depends(get_current_user)):
+def import_video(
+    req: ImportRequest, 
+    user=Depends(get_current_user),
+):
     try:
         user_id = user["user_id"]
         req.url = clean_tiktok_url(req.url)
         logger.info(f"Import video request from user {user_id} for URL: {req.url}")
 
-        if req.url in video_jobs and video_jobs[req.url] not in ["Failed", "Completed"]:
-            existing = db.get_video_by_url(req.url)
-            logger.info(f"Video already being processed: {req.url}")
-            return {
-                "message": "Video is already being processed.",
-                "clean_url": req.url,
-                "video_id": existing["id"] if existing else None
-            }
+        # Check for existing jobs for this URL
+        all_jobs = get_all_jobs()
+        for job_id, job in all_jobs.items():
+            if job["url"] == req.url and job["status"] not in ["Failed", "Completed"]:
+                logger.info(f"Video already being processed: {req.url}")
+                return {
+                    "message": "Video is already being processed.",
+                    "clean_url": req.url,
+                    "job_id": job_id,
+                    "status": job["status"],
+                    "progress": job.get("progress", 0)
+                }
 
-        video_jobs[req.url] = "Queued"
-        executor.submit(import_worker, user_id, req.url)
+        # Create a new job
+        job_id = create_job(req.url, user_id)
+        executor.submit(import_worker, job_id, user_id, req.url)
 
-        existing = db.get_video_by_url(req.url)
-        video_id = existing["id"] if existing else None
-        logger.info(f"Started video import job for URL: {req.url}")
         return {
             "message": "Video import started",
             "clean_url": req.url,
-            "video_id": video_id
+            "job_id": job_id,
+            "status": "Queued",
+            "progress": 0
         }
     except Exception as e:
         logger.error(f"Video import error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# Update the progress endpoint
 @app.post("/progress")
 async def get_progress(request: Request):
     try:
-        if not video_jobs:
-            logger.debug("No active video jobs")
-            return {"status": "completed"}
-        else:
-            logger.debug(f"Active video jobs: {len(video_jobs)}")
-            return {"status": "processing", "active_jobs": len(video_jobs)}
+        data = await request.json()
+        job_id = data.get("job_id")
+        
+        job = get_job(job_id)
+        print(job)
+        if not job:
+            return {"status": "not_found"}
+           
+        return {
+            "status": job["status"],
+            "progress": job.get("progress", 0),
+            "message": job.get("message", ""),
+            "url": job["url"]
+        }
     except Exception as e:
         logger.error(f"Progress check error: {str(e)}")
         return {"error": str(e)}
@@ -282,21 +300,27 @@ def query_video(req: QueryRequest, user=Depends(get_current_user)):
         logger.error(f"Query error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-def import_worker(user_id, url):
+def import_worker(job_id: str,user_id, url):
     try:
-        video_jobs[url] = "Downloading"
+        update_job_progress(job_id, "Downloading", 10, "Starting download")
         logger.info(f"Starting download for URL: {url}")
         
         existing = db.get_video_by_url(url)
+        print("DB BACK:",existing)
         if existing:
+            print("inside f")
+            print (type(user_id))
+            print (type(existing["id"]))
             db.link_user_video(user_id, existing["id"])
-            video_jobs[url] = "Completed (linked)"
+            print("vidoe linked")
+            update_job_progress(job_id, "Completed", 100, "Video already existed - linked to account")
             logger.info(f"Video already exists, linked to user: {url}")
             return
 
         file_path, metadata = None, None
         for attempt in range(MAX_RETRIES):
             try:
+                update_job_progress(job_id, "Downloading", 15 + attempt*5, f"Download attempt {attempt+1}")
                 file_path, metadata = download.download_video(url)
                 if not os.path.exists(file_path) or os.path.getsize(file_path) < 1000:
                     raise Exception("Download failed or returned small file")
@@ -306,14 +330,15 @@ def import_worker(user_id, url):
                 time.sleep(1)
         else:
             error_msg = "Failed to download video after retries"
+            update_job_progress(job_id, "Failed", 0, error_msg)
             logger.error(error_msg)
             raise Exception(error_msg)
-
-        video_jobs[url] = "Transcribing"
+        update_job_progress(job_id, "Transcribing", 40, "Starting transcription")
         logger.info(f"Starting transcription for URL: {url}")
         transcript = ""
         for attempt in range(MAX_RETRIES):
             try:
+                update_job_progress(job_id, "Transcribing", 45 + attempt*5, f"Transcription attempt {attempt+1}")
                 transcript = transcribe.transcribe_audio(file_path)
                 if transcript.strip() == "":
                     raise Exception("Empty transcript")
@@ -324,8 +349,9 @@ def import_worker(user_id, url):
         else:
             error_msg = "Failed to transcribe video after retries"
             logger.error(error_msg)
+            update_job_progress(job_id, "Failed", 40, error_msg)
             raise Exception(error_msg)
-
+        update_job_progress(job_id, "Analyzing", 70, "Generating summary and tags")
         summary_tags_prompt = f"""
 You are a content summarizer for short videos. Given the transcript below, produce:
 
@@ -347,6 +373,7 @@ Return your response in dict format:
         tags = []
         for attempt in range(MAX_RETRIES):
             try:
+                update_job_progress(job_id, "Analyzing", 75 + attempt*5, f"Analysis attempt {attempt+1}")
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
@@ -367,37 +394,37 @@ Return your response in dict format:
                 time.sleep(2)
         else:
             error_msg = "Failed to get summary after retries"
+            update_job_progress(job_id, "Failed", 70, error_msg)
             logger.error(error_msg)
             raise Exception(error_msg)
-
-        video_id = db.add_video_record(url, file_path, transcript, metadata, summary, tags)
-        db.link_user_video(user_id, video_id)
-        logger.info(f"Successfully added video record for URL: {url}")
-        for title, text, score in zip(
-    data["hooks"]["hook-title"],
-    data["hooks"]["hook-text"],
-    data["hooks"]["confidence-score"]
-):highlight_id = add_highlight(
-        user_id=user_id,
-        video_id=video_id,
-        title=title,
-        text=text,
-        color="yellow",
-        confidence_score=float(score)
-    )
         try:
-            add_new_transcript(transcript, video_id=video_id)
+            update_job_progress(job_id, "Saving", 90, "Saving video data")
+            video_id = db.add_video_record(url, file_path, transcript, metadata, summary, tags)
+            logger.info(f"Successfully added video record for URL: {url}")
+            add_new_transcript(transcript,video_id)
             logger.info(f"Added transcript to vector DB for video ID: {video_id}")
+            db.link_user_video(user_id, video_id)
+            for title, text, score in zip(
+                data["hooks"]["hook-title"],
+                data["hooks"]["hook-text"],
+                data["hooks"]["confidence-score"]
+            ):
+                highlight_id = add_highlight(
+                    user_id=user_id,
+                    video_id=video_id,
+                    title=title,
+                    text=text,
+                    color="yellow",
+                    confidence_score=float(score)
+                )
         except Exception as e:
-            logger.error(f"Embedding failed: {e}")
-            raise Exception(f"Embedding failed: {e}")
-
-        video_jobs[url] = "Completed"
+            logger.error(f"Video Saving failed: {e}")
+        update_job_progress(job_id, "Completed", 100, "Video processing completed")
         logger.info(f"Video processing completed for URL: {url}")
     except Exception as e:
         error_msg = f"Failed to process video {url}: {str(e)}"
         logger.error(error_msg)
-        video_jobs[url] = f"Failed: {str(e)}"
+        update_job_progress(job_id, "Failed", 0, error_msg)
 
 @app.post("/query_across_videos")
 def query_across_videos(req: CrossVideoQueryRequest, user=Depends(get_current_user)):

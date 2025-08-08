@@ -10,48 +10,40 @@ from typing import Optional, Union
 settings = get_settings()
 logger = get_logger(settings.LOGS_PATH)
 
-class VectorDBManager:
-    """Manager for Chroma vector database operations"""
-    
-    def __init__(self):
-        self.db_path = settings.get("VECTOR_DB_PATH", "./db/tiktok_videos_processor_vector_db")
-        self.text_splitter = CharacterTextSplitter(
+db_path = settings.get("VECTOR_DB_PATH", "./db/tiktok_videos_processor_vector_db")
+text_splitter = CharacterTextSplitter(
             chunk_size=settings.get("CHUNK_SIZE", 1000),
             chunk_overlap=settings.get("CHUNK_OVERLAP", 300)
         )
-        self.embedding_model = settings.get("EMBEDDING_MODEL", "text-embedding-3-small")
-        os.makedirs(self.db_path, exist_ok=True)
-        logger.info(f"VectorDB initialized at {self.db_path}")
-
-    def get_vector_store(self, 
-                        video_id: Optional[int] = None,
-                        as_retriever: bool = False) -> Union[Chroma, any]:
-        """Get Chroma vector store instance"""
-        try:
-            embedding_fn = OpenAIEmbeddings(
-                model=self.embedding_model,
+embedding_model = settings.get("EMBEDDING_MODEL", "text-embedding-3-small")
+os.makedirs(db_path, exist_ok=True)
+def get_vector_store( video_id: Optional[int] = None,as_retriever: bool = False) -> Union[Chroma, any]:
+    """Get Chroma vector store instance"""
+    try:
+        embedding_fn = OpenAIEmbeddings(
+                model=embedding_model,
                 openai_api_key=settings.OPENAI_API_KEY
             )
             
-            vectorstore = Chroma(
-                persist_directory=self.db_path,
+        vectorstore = Chroma(
+                persist_directory=db_path,
                 embedding_function=embedding_fn
             )
             
-            logger.debug(f"Vector store retrieved {'with retriever' if as_retriever else ''}")
-            return vectorstore.as_retriever() if as_retriever else vectorstore
+        logger.debug(f"Vector store retrieved {'with retriever' if as_retriever else ''}")
+        return vectorstore.as_retriever() if as_retriever else vectorstore
             
-        except Exception as e:
+    except Exception as e:
             logger.error(f"Failed to get vector store: {str(e)}", exc_info=True)
             raise
 
-    def add_new_transcript(self, doc: str, video_id: int) -> bool:
+def add_new_transcript(doc: str, video_id: int) -> bool:
         """Split and embed transcript with associated video_id"""
         try:
             logger.info(f"Processing transcript for video {video_id}")
             
             # Split document
-            split_text = self.text_splitter.split_text(doc)
+            split_text = text_splitter.split_text(doc)
             logger.debug(f"Split transcript into {len(split_text)} chunks")
             
             # Create documents with metadata
@@ -68,7 +60,7 @@ class VectorDBManager:
             ]
             
             # Add to vector store
-            db_instance = self.get_vector_store()
+            db_instance = get_vector_store()
             db_instance.add_documents(documents=docs)
             
             # Verify storage
@@ -80,17 +72,3 @@ class VectorDBManager:
         except Exception as e:
             logger.error(f"Failed to process transcript for video {video_id}: {str(e)}", exc_info=True)
             return False
-
-    def cleanup(self):
-        """Clean up resources if needed"""
-        pass
-
-# Create singleton instance
-vector_db_manager = VectorDBManager()
-
-# Public interface functions
-def get_vector_store(video_id: Optional[int] = None, as_retriever: bool = False):
-    return vector_db_manager.get_vector_store(video_id, as_retriever)
-
-def add_new_transcript(doc: str, video_id: int) -> bool:
-    return vector_db_manager.add_new_transcript(doc, video_id)

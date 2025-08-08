@@ -113,7 +113,7 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent
-        className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 grid max-w-2xl w-[60vw] max-h-[90vh] overflow-hidden bg-gray-900 border-red-500/20 text-white transition-all duration-300 ${
+        className={`fixed top-1/2 left-1/2 overflow-y-auto -translate-x-1/2 -translate-y-1/2 z-50 grid max-w-2xl w-[60vw] max-h-[90vh] overflow-hidden bg-gray-900 border-red-500/20 text-white transition-all duration-300 ${
           animateIn ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
@@ -124,9 +124,6 @@ export function VideoChatModal({ videoId, videoTitle, children }: VideoChatModal
                 <MessageCircle className="w-6 h-6 text-red-400" />
                 <span className="animate-in slide-in-from-left-2 duration-300">AI Video Assistant</span>
               </DialogTitle>
-              <p className="text-gray-400 text-base animate-in slide-in-from-left-3 duration-300 delay-100">
-                Chat with our AI about "{videoTitle}"
-              </p>
             </div>
           </div>
         </DialogHeader>

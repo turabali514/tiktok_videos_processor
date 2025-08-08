@@ -104,9 +104,11 @@ def get_video_by_url(url: str) -> Optional[Dict]:
     )
     if video:
         logger.debug(f"Found video by URL: {url}")
+        return video[0]
     else:
         logger.debug(f"No video found for URL: {url}")
-    return video
+        return video
+    
 
 def add_video_record(url: str, file_path: str, transcript: str, 
                     metadata: Dict, summary: str = None, tags: List[str] = None) -> int:

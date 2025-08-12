@@ -60,12 +60,12 @@ def add_new_transcript(doc: str, video_id: int) -> bool:
             ]
             
             # Add to vector store
-            db_instance = get_vector_store()
-            db_instance.add_documents(documents=docs)
+            # db_instance = get_vector_store()
+            # db_instance.add_documents(documents=docs)
             
             # Verify storage
-            stored_count = len(db_instance.get()["documents"])
-            logger.info(f"Successfully stored {len(docs)} chunks for video {video_id}. Total in DB: {stored_count}")
+            # stored_count = len(db_instance.get()["documents"])
+            # logger.info(f"Successfully stored {len(docs)} chunks for video {video_id}. Total in DB: {stored_count}")
             
             return True
             

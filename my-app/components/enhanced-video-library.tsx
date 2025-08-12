@@ -34,12 +34,9 @@ export function EnhancedVideoLibrary({
   selectedCollectionId,
   onAddToCollection,
   onRemoveFromCollection,
-  onCreateCollection,
-  onRefetchVideos,
-  onFetchCollectionVideos,
   videoStatus = {}
 }: VideoLibraryProps) {
-  const [progress, setProgress] = useState<Record<string, string>>({})
+  const [progress] = useState<Record<string, string>>({})
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null)
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null)
@@ -50,7 +47,6 @@ export function EnhancedVideoLibrary({
     gap: '1.5rem',
     width: '100%'
   };
-   console.log('Rendering with columns:', columns);
   // Only poll if there are videos processing
   const processingVideos = videos.filter(video => {
     const status = videoStatus[video.id] || "";
@@ -68,7 +64,25 @@ export function EnhancedVideoLibrary({
 
   const displayVideos = videos
   const selectedCollection = collections.find((c) => c.id === selectedCollectionId)
-
+  const NICHE_COLOR_CLASSES = [
+  "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20",
+  "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-lg shadow-blue-500/20",
+  "bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-lg shadow-orange-500/20",
+  "bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-lg shadow-pink-500/20",
+  "bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 shadow-lg shadow-yellow-500/20",
+  "bg-green-500/20 text-green-300 border border-green-500/40 shadow-lg shadow-green-500/20",
+  "bg-red-500/20 text-red-300 border border-red-500/40 shadow-lg shadow-red-500/20",
+  "bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-lg shadow-teal-500/20"
+];
+function getRandomColorForNiche(niche: string) {
+  if (!niche) return NICHE_COLOR_CLASSES[0];
+  let hash = 0;
+  for (let i = 0; i < niche.length; i++) {
+    hash = niche.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % NICHE_COLOR_CLASSES.length;
+  return NICHE_COLOR_CLASSES[index];
+}
   return (
     <ScrollReveal direction="up">
       <div ref={containerRef} className="w-full px-4">
@@ -151,8 +165,9 @@ export function EnhancedVideoLibrary({
                           </VideoCollectionManager>
                         </div>
 
-                        {/* Performance Badge */}
-                        <div className="absolute bottom-3 left-3 z-20">
+                        {/* Performance + Niche Badges */}
+                        <div className="absolute bottom-3 left-3 z-20 flex gap-2">
+                          {/* Performance */}
                           <div
                             className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm transition-all duration-300 ${
                               performance === "high"
@@ -164,6 +179,15 @@ export function EnhancedVideoLibrary({
                           >
                             {performance.toUpperCase()}
                           </div>
+
+                          {/* Niche */}
+                          <div
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm transition-all duration-300 ${
+                            getRandomColorForNiche(video.niche || "")
+                          }`}
+                        >
+                          {video.niche || "Uncategorized"}
+                        </div>
                         </div>
 
                         {/* Hover Overlay */}

@@ -282,7 +282,8 @@ def get_user_videos(user=Depends(get_current_user)):
                 "video_sharecount": v["video_sharecount"],
                 "summary": v["summary"],
                 "description": v["video_description"],
-                "tags": v["tags"]
+                "tags": v["tags"],
+                "niche":v["niche"],
             }
             for v in videos
         ]
@@ -327,7 +328,6 @@ def import_worker(job_id: str,user_id, url):
                 break
             except Exception as e:
                 logger.warning(f"[Download Retry {attempt+1}] Error: {e}")
-                time.sleep(1)
         else:
             error_msg = "Failed to download video after retries"
             update_job_progress(job_id, "Failed", 0, error_msg)
@@ -345,7 +345,6 @@ def import_worker(job_id: str,user_id, url):
                 break
             except Exception as e:
                 logger.warning(f"[Transcription Retry {attempt+1}] Error: {e}")
-                time.sleep(2)
         else:
             error_msg = "Failed to transcribe video after retries"
             logger.error(error_msg)
@@ -358,6 +357,52 @@ You are a content summarizer for short videos. Given the transcript below, produ
 1. A concise 2-3 sentence summary of what the video is about.
 2. A list of 10 relevant tags (hashtags or keywords) describing the video content with the "#" format.
 3. Identify 5 best hooks from the transcript of the video with hook title and hook text. and also rank the confidence score of the hooks from 0-1)
+4. Classify the style of the video by analyzing, what category/niche it belongs , from the following provided:
+{{1: Voice-over
+-------------
+Narration explaining visuals or storytelling.
+Used for tutorials, behind-the-scenes, etc.
+
+2: Talking Head
+---------------
+Person speaking directly to the camera.
+Often includes opinions, advice, or promotional content.
+
+3: Podcast
+----------
+Conversational or interview-style format.
+Includes back-and-forth dialogue or monologues.
+
+4: Educational
+--------------
+Step-by-step guides or knowledge-based explanations.
+Uses clear structure like “Step 1... Step 2...” or “Here’s how…”
+
+5: Storytime
+------------
+Personal narratives, often starting with a hook.
+Structured in beginning–middle–end format.
+
+4: Commentary
+-------------
+Creator gives opinion on a topic or video.
+Often includes phrases like “Let’s talk about…” or “Here’s what I think…”
+
+5: Listicle
+-----------
+Structured as “Top 5 tips…” or “3 things you didn’t know…”
+Uses numbered sections or predictable format.
+
+6: Motivational
+---------------
+Uplifting speeches or affirmations.
+Format: “You are capable of…” or “Don’t give up…”
+
+7: Promotional
+--------------
+Clear CTA, product/service mention, benefit-focused.
+Format: “Introducing…”, “You need this because…”}}
+
 Transcript:
 {transcript}
 
@@ -368,7 +413,8 @@ Return your response in dict format:
       "hook-title":["title1","title2"],
       "hook-text":["tex1","text2"],
       "confidence-score":["score1","score2","score3"]}}
-  }}"""
+  }},
+  Niche:"video-niche" """
         summary = ""
         tags = []
         for attempt in range(MAX_RETRIES):
@@ -388,10 +434,11 @@ Return your response in dict format:
                 data = json.loads(response)
                 summary = data["summary"]
                 tags = data["tags"]
+                niche=data["Niche"]
+                print(niche)
                 break
             except Exception as e:
                 logger.warning(f"[Summary Retry {attempt+1}] Error: {e}")
-                time.sleep(2)
         else:
             error_msg = "Failed to get summary after retries"
             update_job_progress(job_id, "Failed", 70, error_msg)
@@ -399,10 +446,8 @@ Return your response in dict format:
             raise Exception(error_msg)
         try:
             update_job_progress(job_id, "Saving", 90, "Saving video data")
-            video_id = db.add_video_record(url, file_path, transcript, metadata, summary, tags)
+            video_id = db.add_video_record(url, file_path, transcript, metadata, summary, tags,niche)
             logger.info(f"Successfully added video record for URL: {url}")
-            add_new_transcript(transcript,video_id)
-            logger.info(f"Added transcript to vector DB for video ID: {video_id}")
             db.link_user_video(user_id, video_id)
             for title, text, score in zip(
                 data["hooks"]["hook-title"],
@@ -419,6 +464,8 @@ Return your response in dict format:
                 )
         except Exception as e:
             logger.error(f"Video Saving failed: {e}")
+        add_new_transcript(transcript,video_id)
+        logger.info(f"Added transcript to vector DB for video ID: {video_id}")
         update_job_progress(job_id, "Completed", 100, "Video processing completed")
         logger.info(f"Video processing completed for URL: {url}")
     except Exception as e:

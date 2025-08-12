@@ -30,6 +30,7 @@ export interface VideoData {
   summary?: string | null
   transcript?: string | null
   tags?: string[] | null
+  niche?: string | null
 }
 
 export interface CreateCollectionData {

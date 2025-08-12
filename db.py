@@ -111,7 +111,7 @@ def get_video_by_url(url: str) -> Optional[Dict]:
     
 
 def add_video_record(url: str, file_path: str, transcript: str, 
-                    metadata: Dict, summary: str = None, tags: List[str] = None) -> int:
+                    metadata: Dict, summary: str = None, tags: List[str] = None,niche: str=None) -> int:
     """Add video record with metadata"""
     try:
         result = execute_query("""
@@ -122,8 +122,8 @@ def add_video_record(url: str, file_path: str, transcript: str,
                 video_description, video_is_ad, author_username,
                 author_name, author_followercount, author_followingcount,
                 author_heartcount, author_videocount, author_diggcount,
-                author_verified, poi_name, poi_address, poi_city, summary, tags
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                author_verified, poi_name, poi_address, poi_city, summary, tags,niche
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,%s)
             RETURNING id
         """, (
             url, file_path, transcript,
@@ -149,7 +149,8 @@ def add_video_record(url: str, file_path: str, transcript: str,
             metadata.get("poi_address"),
             metadata.get("poi_city"),
             summary,
-            json.dumps(tags) if tags else None
+            json.dumps(tags) if tags else None,
+            niche,
         ), fetch=True)
         
         logger.info(f"Added video record with ID: {result['id']}")
@@ -174,10 +175,11 @@ def get_videos_for_user(user_id: int) -> List[Dict]:
             SELECT v.id, v.url, v.file_path, v.transcript, 
                    v.video_playcount, v.video_diggcount,
                    v.video_commentcount, v.video_sharecount, 
-                   v.summary, v.video_description, v.tags
+                   v.summary, v.video_description, v.tags,v.niche
             FROM videos v
             JOIN user_videos uv ON uv.video_id = v.id
             WHERE uv.user_id = %s
+            ORDER BY v.id DESC
         """, (user_id,), fetch=True)
         
         if not videos:

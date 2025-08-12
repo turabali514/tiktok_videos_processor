@@ -109,6 +109,7 @@ export default function DashboardPage() {
       
       if (!response.ok) throw new Error("Failed to fetch videos");
       const data = await response.json();
+      console.log(data)
       const transformedVideos = data.map((video: any) => ({
         id: video?.id?.toString() || `temp-${Math.random().toString(36).substr(2, 9)}`,
         title: video?.description || "Untitled Video", 
@@ -128,10 +129,12 @@ export default function DashboardPage() {
           ? `${BASE_URL}${video.file_path.replace(/\\/g, '/')}`
           : "/placeholder.svg",
         collectionIds: [],
+        niche: video?.niche || "Uncategorized",
         summary: video?.summary || "",
         transcript: video?.transcript || "",
         clean_url: video?.url || ""
       }));
+      console.log(transformedVideos)
       setVideos(transformedVideos);
       if (selectedCollectionId === -1 || !selectedCollectionId) {
         setCollectionVideos(transformedVideos);

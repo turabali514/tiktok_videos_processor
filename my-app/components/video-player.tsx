@@ -97,7 +97,7 @@ export function VideoPlayer({ src, className }: VideoPlayerProps & { className?:
     if (isPlaying && !isHovered) {
       timer = setTimeout(() => {
         setShowControls(false)
-      }, 2000)
+      })
     } else {
       setShowControls(true)
     }
@@ -160,7 +160,7 @@ export function VideoPlayer({ src, className }: VideoPlayerProps & { className?:
 
       {/* Bottom controls bar */}
       {showControls && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 z-20 flex justify-between items-center">
+        <div className="absolute top-0 left-0 bg-gradient-to-t from-black/80 to-transparent p-2 z-20 flex justify-between items-center">
           {/* Mute button */}
           <Button
             onClick={handleMuteToggle}

@@ -120,6 +120,7 @@ def ask_from_all_videos(question: str, user_id: str) -> str:
         cross_prompt_template = PromptTemplate.from_template("""
 Act as a Social Media Expert, who uses the transcript as the context to answer the user queries, helping him in achiving his goals. Answer the user queries in a Professional tone and style. Also respond in text only format ,But no markdown format  response / characters allowed.
 You will receive chunks from multiple videos, that will contain the video numbering which is added to just distiguish the chunks frDom one another.
+
 Transcript:
 {context}
 

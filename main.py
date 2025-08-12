@@ -38,8 +38,11 @@ executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # frontend dev environment
-    allow_credentials=True,
+    allow_origins=["http://localhost:3000",  # frontend dev environment
+        "https://www.askskylar.ai",
+        "https://tiktokcartelle.techaiapps.com"
+        ], 
+    allow_credentials=True,                  
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -339,9 +342,11 @@ def import_worker(job_id: str,user_id, url):
         for attempt in range(MAX_RETRIES):
             try:
                 update_job_progress(job_id, "Transcribing", 45 + attempt*5, f"Transcription attempt {attempt+1}")
+
                 transcript = transcribe.transcribe_audio(file_path)
                 if transcript.strip() == "":
                     raise Exception("Empty transcript")
+                print(transcript)
                 break
             except Exception as e:
                 logger.warning(f"[Transcription Retry {attempt+1}] Error: {e}")
@@ -355,6 +360,7 @@ def import_worker(job_id: str,user_id, url):
 You are a content summarizer for short videos. Given the transcript below, produce:
 
 1. A concise 2-3 sentence summary of what the video is about.
+<<<<<<< HEAD
 2. A list of 10 relevant tags (hashtags or keywords) describing the video content with the "#" format.
 3. Identify 5 best hooks from the transcript of the video with hook title and hook text. and also rank the confidence score of the hooks from 0-1)
 4. Classify the style of the video by analyzing, what category/niche it belongs , from the following provided:
@@ -420,6 +426,7 @@ Return your response in dict format:
         for attempt in range(MAX_RETRIES):
             try:
                 update_job_progress(job_id, "Analyzing", 75 + attempt*5, f"Analysis attempt {attempt+1}")
+
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[

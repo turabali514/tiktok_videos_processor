@@ -343,7 +343,14 @@ main {
     animation-fill-mode: both;
   }
 }
+.dialog-content {
+  padding: 24px; /* default */
 
+  /* Mobile screens */
+  @media (max-width: 640px) {
+    padding: 12px;
+  }
+}
 .fixed {
   contain: layout;
 }

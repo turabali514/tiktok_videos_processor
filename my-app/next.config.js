@@ -19,7 +19,6 @@ typescript: {
   eslint: {
     ignoreDuringBuilds: true, // ? disables ESLint checks during build
   },	
- devIndicators: false,
 
 };
 

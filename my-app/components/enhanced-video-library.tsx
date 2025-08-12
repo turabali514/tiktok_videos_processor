@@ -4,15 +4,14 @@ import { useRef, useState, useEffect } from "react"
 import { VideoPlayer } from "./video-player"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { VideoCollectionManager } from "./video-collection-manager"
 import { FileText, Video, Eye, Heart, MessageCircle, Share, Folder } from "lucide-react"
 import { ScrollReveal } from "./scroll-reveal"
 import { VideoChatModal } from "./video-chat-modal"
 import { VideoSummaryModal } from "./video-summary-modal"
-import { VideoCollectionManager } from "./video-collection-manager"
+import useDynamicColumns from "@/hooks/use-column-count"
 import type { VideoData, Collection } from "@/types/collection"
-import useDynamicColumns from '@/hooks/use-column-count';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 interface VideoLibraryProps {
   videos: VideoData[]
   isLoading: boolean
@@ -22,9 +21,8 @@ interface VideoLibraryProps {
   onRemoveFromCollection: (collectionId: number, videoIds: string) => Promise<void>
   onCreateCollection: (data: { name: string; color: string; icon: string }) => Promise<Collection>
   onRefetchVideos: () => Promise<void>
-  onFetchCollectionVideos?: (collectionId: number) => Promise<VideoData[]> 
-  videoStatus?: Record<string, string>;
-  
+  onFetchCollectionVideos?: (collectionId: number) => Promise<VideoData[]>
+  videoStatus?: Record<string, string>
 }
 
 export function EnhancedVideoLibrary({
@@ -40,8 +38,8 @@ export function EnhancedVideoLibrary({
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null)
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null)
-  const { containerRef, columns } = useDynamicColumns(350);
-    const gridStyle = {
+  const { containerRef, columns } = useDynamicColumns(350)
+  const gridStyle = {
     display: 'grid',
     gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
     gap: '1.5rem',
@@ -52,18 +50,29 @@ export function EnhancedVideoLibrary({
     const status = videoStatus[video.id] || "";
     return status && !status.includes("Completed") && !status.includes("Failed");
   })
+  const ITEMS_PER_BATCH = 10
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_BATCH)
+
+  const loadMore = () => {
+    setVisibleCount((prev) => Math.min(prev + ITEMS_PER_BATCH, videos.length))
+  }
+
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_BATCH)
+  }, [videos])
+
+  const displayedVideos = videos.slice(0, visibleCount)
+  const selectedCollection = collections.find((c) => c.id === selectedCollectionId)
 
   const getPerformanceLevel = (video: VideoData): "high" | "medium" | "low" => {
-    if (!video) return "low"
-    const engagementScore = (video.likes || 0) * 0.5 + (video.comments || 0) * 1 + (video.shares || 0) * 2
+    const engagementScore =
+      (video.likes || 0) * 0.5 +
+      (video.comments || 0) * 1 +
+      (video.shares || 0) * 2
     if (engagementScore > 10000) return "high"
     if (engagementScore > 3000) return "medium"
     return "low"
   }
-
-
-  const displayVideos = videos
-  const selectedCollection = collections.find((c) => c.id === selectedCollectionId)
   const NICHE_COLOR_CLASSES = [
   "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20",
   "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-lg shadow-blue-500/20",
@@ -85,8 +94,7 @@ function getRandomColorForNiche(niche: string) {
 }
   return (
     <ScrollReveal direction="up">
-      <div ref={containerRef} className="w-full px-4">
-        {/* Header Section */}
+      <div ref={containerRef} className="w-full px-4" style={{ minHeight: "100vh" }}>
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -100,23 +108,22 @@ function getRandomColorForNiche(niche: string) {
                 {selectedCollection?.name || "All Videos"}
               </h3>
               <p className="text-gray-400 text-sm mt-1">
-                {displayVideos.length} videos •{" "}
-                {displayVideos.reduce((acc, video) => acc + (video?.views || 0), 0).toLocaleString()} total views
+                {videos.length} videos -{" "}
+                {videos.reduce((acc, video) => acc + (video?.views || 0), 0).toLocaleString()} total views
               </p>
             </div>
           </div>
         </div>
 
-        {/* Video Grid - Using CSS Grid with auto-fit for better responsive control */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-          gap: '1.5rem',
-          width: '100%'
-        }}>
-          {displayVideos.map((video, index) => {
-            if (!video?.id) return null // Skip invalid videos
-
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${Math.max(columns, 1)}, minmax(0, 1fr))`,
+            gap: "1.5rem"
+          }}
+        >
+          {displayedVideos.map((video, index) => {
+            if (!video?.id) return null
             const performance = getPerformanceLevel(video)
             const isHovered = hoveredVideo === String(video.id)
 
@@ -124,57 +131,42 @@ function getRandomColorForNiche(niche: string) {
               <div key={video.id} className="w-full">
                 <ScrollReveal delay={index * 80} direction="up">
                   <Card
-                    className="bg-gray-800/40 backdrop-blur-sm border-gray-700/50 hover:bg-gray-800/60 transition-all duration-500 transform hover:scale-[1.02] hover:-translate-y-1 group cursor-pointer relative overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-red-500/10 h-full flex flex-col"
+                    className="bg-gray-800/40 hover:bg-gray-800/60 border-gray-700/50 transition-all duration-500 transform hover:scale-[1.02] hover:-translate-y-1 group cursor-pointer relative overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-red-500/10 flex flex-col"
                     onClick={() => setSelectedVideo(String(video.id))}
                     onMouseEnter={() => setHoveredVideo(String(video.id))}
                     onMouseLeave={() => setHoveredVideo(null)}
                   >
                     <CardContent className="p-0 flex-1 flex flex-col">
-                      {/* Video Thumbnail Container */}
                       <div className="relative aspect-[3/4] bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden w-full min-h-[180px]">
                         <VideoPlayer src={video.thumbnail || ""} className="absolute inset-0 w-full h-full" />
-              
-                        {/* Collection Manager Button */}
+
                         <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           <VideoCollectionManager
                             video={video}
                             collections={collections}
-                            onAddToCollection={async (collectionId, videoId) => {
-                              try {
-                                await onAddToCollection(collectionId,videoId)
-                              } catch (error) {
-                                console.error("Failed to add to collection:", error)
-                              }
-                            }}
-                            onRemoveFromCollection={async (collectionId, videoId) => {
-                              try {
-                                await onRemoveFromCollection(collectionId, videoId)
-                              } catch (error) {
-                                console.error("Failed to remove from collection:", error)
-                              }
-                            }}
+                            onAddToCollection={onAddToCollection}
+                            onRemoveFromCollection={onRemoveFromCollection}
                           >
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="w-9 h-9 p-0 bg-black/60 hover:bg-black/80 text-white border border-white/20 hover:border-white/40 rounded-full backdrop-blur-sm transition-all duration-300 hover:scale-110"
+                              className="w-9 h-9 p-0 bg-black/60 text-white border border-white/20 hover:border-white/40 rounded-full"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Folder className="w-4 h-4" />
                             </Button>
                           </VideoCollectionManager>
                         </div>
-
                         {/* Performance + Niche Badges */}
                         <div className="absolute bottom-3 left-3 z-20 flex gap-2">
                           {/* Performance */}
                           <div
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm transition-all duration-300 ${
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
                               performance === "high"
-                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-lg shadow-emerald-500/20"
+                                ? "bg-emerald-500/20 text-emerald-300"
                                 : performance === "medium"
-                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-lg shadow-amber-500/20"
-                                  : "bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-lg shadow-rose-500/20"
+                                ? "bg-amber-500/20 text-amber-300"
+                                : "bg-rose-500/20 text-rose-300"
                             }`}
                           >
                             {performance.toUpperCase()}
@@ -190,65 +182,47 @@ function getRandomColorForNiche(niche: string) {
                         </div>
                         </div>
 
-                        {/* Hover Overlay */}
                         <div
-                          className={`absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 ${isHovered ? "opacity-100" : "opacity-0"}`}
+                          className={`absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-300 ${
+                            isHovered ? "opacity-100" : "opacity-0"
+                          }`}
                         />
                       </div>
 
-                      {/* Video Info */}
-                      <div className="p-4 flex-1 flex flex-col min-h-[180px] overflow-visible">
+                      <div className="p-4 flex-1 flex flex-col min-h-[180px]">
                         <h4 className="font-semibold text-white text-sm line-clamp-2 leading-relaxed mb-3">
                           {video.title || "Untitled Video"}
                         </h4>
 
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-2 gap-2 text-xs mb-4 overflow-visible">
-                          <div className="flex items-center gap-2 text-gray-400 hover:text-red-400 transition-colors duration-300">
-                            <Eye className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="font-medium truncate">
-                              {(video.views || 0) > 1000000
-                                ? `${((video.views || 0) / 1000000).toFixed(1)}M`
-                                : `${((video.views || 0) / 1000).toFixed(0)}K`}
-                            </span>
+                        <div className="grid grid-cols-2 gap-2 text-xs mb-4">
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>{(video.views || 0).toLocaleString()}</span>
                           </div>
-                          <div className="flex items-center gap-2 text-gray-400 hover:text-pink-400 transition-colors duration-300">
-                            <Heart className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="font-medium truncate">
-                              {(video.likes || 0) > 1000
-                                ? `${((video.likes || 0) / 1000).toFixed(0)}K`
-                                : video.likes || 0}
-                            </span>
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <Heart className="w-3.5 h-3.5" />
+                            <span>{(video.likes || 0).toLocaleString()}</span>
                           </div>
-                          <div className="flex items-center gap-2 text-gray-400 hover:text-blue-400 transition-colors duration-300">
-                            <MessageCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="font-medium truncate">
-                              {(video.comments || 0) > 1000
-                                ? `${((video.comments || 0) / 1000).toFixed(0)}K`
-                                : video.comments || 0}
-                            </span>
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>{(video.comments || 0).toLocaleString()}</span>
                           </div>
-                          <div className="flex items-center gap-2 text-gray-400 hover:text-green-400 transition-colors duration-300">
-                            <Share className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="font-medium truncate">
-                              {(video.shares || 0) > 1000
-                                ? `${((video.shares || 0) / 1000).toFixed(0)}K`
-                                : video.shares || 0}
-                            </span>
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <Share className="w-3.5 h-3.5" />
+                            <span>{(video.shares || 0).toLocaleString()}</span>
                           </div>
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="mt-auto grid grid-cols-2 gap-2 overflow-visible">
+                        <div className="mt-auto grid grid-cols-2 gap-2">
                           <VideoChatModal videoId={video.id} videoTitle={video.title || "Untitled"}>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={(e) => e.stopPropagation()}
-                              className="flex-1 h-8 px-3 text-xs bg-gradient-to-r from-red-500/15 to-pink-500/15 hover:from-red-500/25 hover:to-pink-500/25 text-red-300 border border-red-500/30 hover:border-red-400/50 rounded-full transition-all duration-300 hover:scale-105 font-medium"
+                              className="h-8 px-3 text-xs text-red-300"
                             >
                               <MessageCircle className="w-3.5 h-3.5 mr-1.5" />
-                              <span className="truncate">Chat</span>
+                              Chat
                             </Button>
                           </VideoChatModal>
 
@@ -256,10 +230,10 @@ function getRandomColorForNiche(niche: string) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="flex-1 h-8 px-3 text-xs bg-gradient-to-r from-pink-500/15 to-red-500/15 hover:from-pink-500/25 hover:to-red-500/25 text-pink-300 border border-pink-500/30 hover:border-pink-400/50 rounded-full transition-all duration-300 hover:scale-105 font-medium"
+                              className="h-8 px-3 text-xs text-pink-300"
                             >
-                              <FileText className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
-                              <span className="truncate">Summary</span>
+                              <FileText className="w-3.5 h-3.5 mr-1.5" />
+                              Summary
                             </Button>
                           </VideoSummaryModal>
                         </div>
@@ -272,17 +246,21 @@ function getRandomColorForNiche(niche: string) {
           })}
         </div>
 
-        {/* Empty State */}
-        {displayVideos.length === 0 && !isLoading && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Video className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-300 mb-2">No videos found</h3>
-            <p className="text-gray-500">
-              {selectedCollection ? `No videos in "${selectedCollection.name}" collection` : "No videos available"}
-            </p>
+        {/* Load More Button */}
+        {visibleCount < videos.length && (
+          <div className="text-center mt-8">
+            <Button
+              onClick={loadMore}
+              className="px-6 py-3 bg-pink-600 text-white hover:bg-pink-700 rounded-md"
+            >
+              Load More Videos
+            </Button>
           </div>
+        )}
+
+        {/* No videos fallback */}
+        {videos.length === 0 && !isLoading && (
+          <div className="text-center py-16 text-gray-400">No videos available.</div>
         )}
       </div>
     </ScrollReveal>

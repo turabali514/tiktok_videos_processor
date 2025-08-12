@@ -67,4 +67,10 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "migration4 failed"
     exit 1
 }
+Write-Output "Running migraton5 (add video niche)..."
+psql -h localhost -U tiktok_user -d tiktok_processor -f "../migrations/migration5_add_video_niche.sql"
+if ($LASTEXITCODE -ne 0){
+    Write-Error "migration5 failed"
+    exit 1
+}
 Write-Output "All migrations applied successfully."

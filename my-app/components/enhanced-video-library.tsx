@@ -73,6 +73,26 @@ export function EnhancedVideoLibrary({
     if (engagementScore > 3000) return "medium"
     return "low"
   }
+  const getEngagementBadge = (video: VideoData) => {
+  const engagementScore =
+    (video.likes || 0) * 1+
+    (video.comments || 0) * 2 +
+    (video.shares || 0) * 3;
+  const views = video.views || 0;
+  const engagement = views > 0 ? (engagementScore / views) * 100 : 0;
+
+  let style = "bg-rose-500/20 text-rose-300"; // low
+  if (engagement > 20) style = "bg-amber-500/20 text-amber-300"; // medium
+  if (engagement > 50) style = "bg-emerald-500/20 text-emerald-300"; // high
+
+  return (
+    <div
+      className={`inline-flex items-center px-3 py-1 mb-3 rounded-full text-xs font-semibold backdrop-blur-sm ${style}`}
+    >
+      Engagement: {engagement.toFixed(1)}%
+    </div>
+  );
+};
   const NICHE_COLOR_CLASSES = [
   "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20",
   "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-lg shadow-blue-500/20",
@@ -193,7 +213,7 @@ function getRandomColorForNiche(niche: string) {
                         <h4 className="font-semibold text-white text-sm line-clamp-2 leading-relaxed mb-3">
                           {video.title || "Untitled Video"}
                         </h4>
-
+                       {getEngagementBadge(video)}
                         <div className="grid grid-cols-2 gap-2 text-xs mb-4">
                           <div className="flex items-center gap-2 text-gray-400">
                             <Eye className="w-3.5 h-3.5" />

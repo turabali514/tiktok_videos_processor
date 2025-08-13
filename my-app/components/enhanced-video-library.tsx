@@ -156,9 +156,9 @@ function getRandomColorForNiche(niche: string) {
                     onMouseEnter={() => setHoveredVideo(String(video.id))}
                     onMouseLeave={() => setHoveredVideo(null)}
                   >
-                    <CardContent className="p-0 flex-1 flex flex-col">
-                      <div className="relative aspect-[3/4] bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden w-full min-h-[180px]">
-                        <VideoPlayer src={video.thumbnail || ""} className="absolute inset-0 w-full h-full" />
+                    <CardContent className="p-0 flex-1 flex flex-col h-full">
+                      <div className="relative aspect-[3/4] h-full bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden w-full min-h-[180px]">
+                        <VideoPlayer src={video.thumbnail || ""} videoId={String(video.id)} priority={getPerformanceLevel(video) === "high" ? "high" : "medium"} className="absolute inset-0 w-full h-full" />
 
                         <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           <VideoCollectionManager

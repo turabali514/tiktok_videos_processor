@@ -175,7 +175,7 @@ def get_videos_for_user(user_id: int) -> List[Dict]:
             SELECT v.id, v.url, v.file_path, v.transcript, 
                    v.video_playcount, v.video_diggcount,
                    v.video_commentcount, v.video_sharecount, 
-                   v.summary, v.video_description, v.tags,v.niche
+                   v.summary, v.video_description, v.tags,v.niche,v.author_username,v.author_name
             FROM videos v
             JOIN user_videos uv ON uv.video_id = v.id
             WHERE uv.user_id = %s

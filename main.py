@@ -287,6 +287,8 @@ def get_user_videos(user=Depends(get_current_user)):
                 "description": v["video_description"],
                 "tags": v["tags"],
                 "niche":v["niche"],
+                "author_username":v["author_username"],
+                "author_name":v["author_name"],
             }
             for v in videos
         ]

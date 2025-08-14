@@ -213,6 +213,26 @@ function getRandomColorForNiche(niche: string) {
                         <h4 className="font-semibold text-white text-sm line-clamp-2 leading-relaxed mb-3">
                           {video.title || "Untitled Video"}
                         </h4>
+                        <div className="flex items-center justify-between mb-3">
+                            <a
+                              href={`https://www.tiktok.com/@${video.author_username || ""}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-sm font-semibold bg-gradient-to-r from-pink-400 to-white bg-clip-text text-transparent hover:underline"
+                            >
+                              {video.author_name || "Unknown Author"}
+                            </a>
+                            <a
+                              href={`https://www.tiktok.com/@${video.author_username || ""}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-sm font-semibold bg-gradient-to-r from-pink-400 to-white bg-clip-text text-transparent hover:underline"
+                            >
+                              @{video.author_username || "Unknown Author"}
+                            </a>
+                          </div>
                        {badge}
                         <div className="grid grid-cols-2 gap-2 text-xs mb-4">
                           <div className="flex items-center gap-2 text-gray-400">

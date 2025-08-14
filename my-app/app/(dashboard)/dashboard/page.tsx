@@ -130,6 +130,8 @@ export default function DashboardPage() {
           : "/placeholder.svg",
         collectionIds: [],
         niche: video?.niche || "Uncategorized",
+        author_name:video?.author_name || "",
+        author_username:video?.author_username || "",
         summary: video?.summary || "",
         transcript: video?.transcript || "",
         clean_url: video?.url || ""

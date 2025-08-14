@@ -71,8 +71,14 @@ export function AuthForm({ mode, onModeChange, onSuccess }: AuthFormProps) {
       throw new Error(data.detail || "Authentication failed");
     }
     // For both login and signup, let the page component handle the redirect
-    if(await waitForAuth())
-      router.push ("/dashboard");
+    if (mode === "signup") {
+  setError("Account created successfully! Please log in.");
+  setTimeout(() => onSuccess(), 1500); // Give user time to see the message
+} else {
+  if (await waitForAuth()) 
+  { setError("Login Successful!")
+    setTimeout(() => router.push("/dashboard"), 1500);
+}}
   } catch (err) {
     setError(err instanceof Error ? err.message : "Authentication failed");
   } finally {

@@ -64,35 +64,41 @@ export function EnhancedVideoLibrary({
   const displayedVideos = videos.slice(0, visibleCount)
   const selectedCollection = collections.find((c) => c.id === selectedCollectionId)
 
-  const getPerformanceLevel = (video: VideoData): "high" | "medium" | "low" => {
-    const engagementScore =
-      (video.likes || 0) * 0.5 +
-      (video.comments || 0) * 1 +
-      (video.shares || 0) * 2
-    if (engagementScore > 10000) return "high"
-    if (engagementScore > 3000) return "medium"
-    return "low"
-  }
-  const getEngagementBadge = (video: VideoData) => {
-  const engagementScore =
-    (video.likes || 0) * 1+
-    (video.comments || 0) * 2 +
-    (video.shares || 0) * 3;
+  const getEngagementPerformance = (video: VideoData) => {
+  const likes = video.likes || 0;
+  const comments = video.comments || 0;
+  const shares = video.shares || 0;
   const views = video.views || 0;
-  const engagement = views > 0 ? (engagementScore / views) * 100 : 0;
 
+  // Engagement percentage (from your badge logic)
+  const engagementPercent = views > 0
+    ? ((likes * 1 + comments * 2 + shares * 3) / views) * 100
+    : 0;
+
+  // Determine level based on percentage
+  let level: "high" | "medium" | "low" = "low";
   let style = "bg-rose-500/20 text-rose-300"; // low
-  if (engagement > 20) style = "bg-amber-500/20 text-amber-300"; // medium
-  if (engagement > 50) style = "bg-emerald-500/20 text-emerald-300"; // high
+  if (engagementPercent > 2) {
+    level = "medium";
+    style = "bg-amber-500/20 text-amber-300";
+  }
+  if (engagementPercent > 5) {
+    level = "high";
+    style = "bg-emerald-500/20 text-emerald-300";
+  }
 
-  return (
+  // Engagement badge JSX
+  const badge = (
     <div
       className={`inline-flex items-center px-3 py-1 mb-3 rounded-full text-xs font-semibold backdrop-blur-sm ${style}`}
     >
-      Engagement: {engagement.toFixed(1)}%
+      Engagement: {engagementPercent.toFixed(1)}%
     </div>
   );
+
+  return { level, style, badge };
 };
+
   const NICHE_COLOR_CLASSES = [
   "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20",
   "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-lg shadow-blue-500/20",
@@ -144,7 +150,7 @@ function getRandomColorForNiche(niche: string) {
         >
           {displayedVideos.map((video, index) => {
             if (!video?.id) return null
-            const performance = getPerformanceLevel(video)
+            const {level,style,badge} = getEngagementPerformance(video)
             const isHovered = hoveredVideo === String(video.id)
 
             return (
@@ -158,7 +164,7 @@ function getRandomColorForNiche(niche: string) {
                   >
                     <CardContent className="p-0 flex-1 flex flex-col h-full">
                       <div className="relative aspect-[3/4] h-full bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden w-full min-h-[180px]">
-                        <VideoPlayer src={video.thumbnail || ""} videoId={String(video.id)} priority={getPerformanceLevel(video) === "high" ? "high" : "medium"} className="absolute inset-0 w-full h-full" />
+                        <VideoPlayer src={video.thumbnail || ""} videoId={String(video.id)} priority={level === "high" ? "high" : "medium"} className="absolute inset-0 w-full h-full" />
 
                         <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           <VideoCollectionManager
@@ -181,16 +187,10 @@ function getRandomColorForNiche(niche: string) {
                         <div className="absolute bottom-3 left-3 z-20 flex gap-2">
                           {/* Performance */}
                           <div
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
-                              performance === "high"
-                                ? "bg-emerald-500/20 text-emerald-300"
-                                : performance === "medium"
-                                ? "bg-amber-500/20 text-amber-300"
-                                : "bg-rose-500/20 text-rose-300"
-                            }`}
-                          >
-                            {performance.toUpperCase()}
-                          </div>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${style}`}
+            >
+              {level.toUpperCase()}
+            </div>
 
                           {/* Niche */}
                           <div
@@ -213,7 +213,7 @@ function getRandomColorForNiche(niche: string) {
                         <h4 className="font-semibold text-white text-sm line-clamp-2 leading-relaxed mb-3">
                           {video.title || "Untitled Video"}
                         </h4>
-                       {getEngagementBadge(video)}
+                       {badge}
                         <div className="grid grid-cols-2 gap-2 text-xs mb-4">
                           <div className="flex items-center gap-2 text-gray-400">
                             <Eye className="w-3.5 h-3.5" />

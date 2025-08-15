@@ -48,7 +48,24 @@ export const useCollections = (userId: number | null) => {
       setIsLoading(false)
     }
   }
-
+  const cleanTags = (tags: any): string[] => {
+    if (!tags) return [];
+    if (Array.isArray(tags)) {
+      return tags.map(t => 
+        typeof t === 'string'
+          ? t.replace(/^\[|\]|'|"/g, '').trim()
+          : String(t).replace(/^\[|\]|'|"/g, '').trim()
+      ).filter(t => t.length > 0);
+    }
+    if (typeof tags === 'string') {
+      return tags
+        .replace(/^\[|\]$/g, '')
+        .split(',')
+        .map(t => t.replace(/^'|'$|^"|"$/g, '').trim())
+        .filter(t => t.length > 0);
+    }
+    return [];
+  };
   const fetchCollectionVideos = async (collectionId: number): Promise<VideoData[]> => {
   setIsLoading(true);
   try {
@@ -80,6 +97,7 @@ export const useCollections = (userId: number | null) => {
         likes: video.video_diggcount || 0,
         comments: video.video_commentcount || 0,
         shares: video.video_sharecount || 0,
+        tags: cleanTags(video?.tags),
         uploadDate: video.video_timestamp || new Date().toLocaleDateString(),
         performance: getPerformanceLevel(
           video.video_playcount || 0,
@@ -91,6 +109,9 @@ export const useCollections = (userId: number | null) => {
           ? `${BASE_URL}/${video.file_path.replace(/\\/g, '/')}`
           : "/placeholder.svg",
         summary: video.summary || "",
+        niche: video?.niche || "Uncategorized",
+        author_name:video?.author_name || "",
+        author_username:video?.author_username || "",
         transcript: video.transcript || "",
         clean_url: video.url,
         collectionIds: [collectionId.toString()]

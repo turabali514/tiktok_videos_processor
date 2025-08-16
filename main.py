@@ -499,7 +499,8 @@ async def create_highlight(highlight: HighlightCreate, db=Depends(db.get_db), us
             video_id=highlight.video_id,
             title=highlight.title,
             text=highlight.text,
-            color=highlight.color
+            color=highlight.color,
+            confidence_score= 2.0
         )
         logger.info(f"Created highlight {highlight_id} for video {highlight.video_id}")
         return {"id": highlight_id, "message": "Highlight created successfully"}

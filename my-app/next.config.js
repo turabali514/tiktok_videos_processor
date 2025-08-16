@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    allowedDevOrigins: ['https://5ed8be1e46e8.ngrok-free.app'],
-  }, webpack(config, { dev, isServer }) {
+   webpack(config, { dev, isServer }) {
     if (dev && !isServer) {
       // Remove React Refresh overlay plugin
       config.plugins = config.plugins.filter(
@@ -18,6 +16,7 @@ typescript: {
   eslint: {
     ignoreDuringBuilds: true, // ? disables ESLint checks during build
   },	
+
 };
 
 module.exports = nextConfig;

@@ -53,7 +53,7 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
   const [highlightName, setHighlightName] = useState("")
   const [showHighlightsList, setShowHighlightsList] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
 
   const queryClient = useQueryClient()
 
@@ -422,7 +422,6 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
               </Button>
             </div>
           </DialogHeader>
-          
           <div className="flex flex-col h-full min-h-0 overflow-hidden">
             <Tabs defaultValue="summary" className="flex flex-col h-full min-h-0">
               <div className="overflow-x-auto px-4">
@@ -462,11 +461,12 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
                         variant="outline"
                         size="sm"
                         onClick={exportHighlights}
-                        className="border-pink-500/30 text-pink-300 hover:bg-pink-500/10 h-8 px-3 text-xs"
+                        className="border-pink-500/30 text-pink-300 hover:bg-pink-500/10 h-8 px-2 sm:px-3 text-xs"
                         disabled={Object.keys(highlights).length === 0}
                       >
                         <Download className="w-3 h-3 mr-1" />
-                        Export All
+                        <span className="hidden sm:inline">Export All</span>
+                        <span className="sm:hidden">Export</span>
                       </Button>
                     </div>
                     {isLoadingHighlights ? (
@@ -531,7 +531,7 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
                           variant="outline"
                           size="sm"
                           onClick={() => video.summary && copyToClipboard(video.summary, "summary")}
-                          className="border-red-500/30 text-red-300 hover:bg-red-500/10 h-8 px-3 text-xs"
+                          className="border-red-500/30 text-red-300 hover:bg-red-500/10 h-8 px-2 sm:px-3 text-xs"
                           disabled={!video.summary}
                         >
                           <Copy className="w-3 h-3 mr-1" />
@@ -557,7 +557,7 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
                           variant="outline"
                           size="sm"
                           onClick={() => copyToClipboard((video.tags || []).join(" "), "tags")}
-                          className="border-red-500/30 text-red-300 hover:bg-red-500/10 h-8 px-3 text-xs"
+                          className="border-red-500/30 text-red-300 hover:bg-red-500/10 h-8 px-2 sm:px-3 text-xs"
                         >
                           <Copy className="w-3 h-3 mr-1" />
                           {copiedText === "tags" ? "Copied!" : "Copy All"}
@@ -595,7 +595,6 @@ export function VideoSummaryModal({ video, children }: VideoSummaryModalProps) {
                         highlights to see their names, or click to edit them.
                       </p>
                     </div>
-
                     <Card className="bg-gray-800/50 border-gray-700 w-full">
                       <CardHeader className="flex flex-col gap-2 sm:flex-row items-start sm:items-center justify-between pb-3">
                         <CardTitle className="text-base text-white flex items-center gap-2">

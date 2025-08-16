@@ -32,15 +32,24 @@ export function EnhancedVideoLibrary({
   selectedCollectionId,
   onAddToCollection,
   onRemoveFromCollection,
-  onCreateCollection,
-  onRefetchVideos,
-  onFetchCollectionVideos,
   videoStatus = {}
 }: VideoLibraryProps) {
+  const [progress] = useState<Record<string, string>>({})
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null)
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null)
   const { containerRef, columns } = useDynamicColumns(350)
-
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+    gap: '1.5rem',
+    width: '100%'
+  };
+  // Only poll if there are videos processing
+  const processingVideos = videos.filter(video => {
+    const status = videoStatus[video.id] || "";
+    return status && !status.includes("Completed") && !status.includes("Failed");
+  })
   const ITEMS_PER_BATCH = 10
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_BATCH)
 
@@ -55,16 +64,60 @@ export function EnhancedVideoLibrary({
   const displayedVideos = videos.slice(0, visibleCount)
   const selectedCollection = collections.find((c) => c.id === selectedCollectionId)
 
-  const getPerformanceLevel = (video: VideoData): "high" | "medium" | "low" => {
-    const engagementScore =
-      (video.likes || 0) * 0.5 +
-      (video.comments || 0) * 1 +
-      (video.shares || 0) * 2
-    if (engagementScore > 10000) return "high"
-    if (engagementScore > 3000) return "medium"
-    return "low"
+  const getEngagementPerformance = (video: VideoData) => {
+  const likes = video.likes || 0;
+  const comments = video.comments || 0;
+  const shares = video.shares || 0;
+  const views = video.views || 0;
+
+  // Engagement percentage (from your badge logic)
+  const engagementPercent = views > 0
+    ? ((likes * 1 + comments * 2 + shares * 3) / views) * 100
+    : 0;
+
+  // Determine level based on percentage
+  let level: "high" | "medium" | "low" = "low";
+  let style = "bg-rose-500/20 text-rose-300"; // low
+  if (engagementPercent > 2) {
+    level = "medium";
+    style = "bg-amber-500/20 text-amber-300";
+  }
+  if (engagementPercent > 5) {
+    level = "high";
+    style = "bg-emerald-500/20 text-emerald-300";
   }
 
+  // Engagement badge JSX
+  const badge = (
+    <div
+      className={`inline-flex items-center px-3 py-1 mb-3 rounded-full text-xs font-semibold backdrop-blur-sm ${style}`}
+    >
+      Engagement: {engagementPercent.toFixed(1)}%
+    </div>
+  );
+
+  return { level, style, badge };
+};
+
+  const NICHE_COLOR_CLASSES = [
+  "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20",
+  "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-lg shadow-blue-500/20",
+  "bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-lg shadow-orange-500/20",
+  "bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-lg shadow-pink-500/20",
+  "bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 shadow-lg shadow-yellow-500/20",
+  "bg-green-500/20 text-green-300 border border-green-500/40 shadow-lg shadow-green-500/20",
+  "bg-red-500/20 text-red-300 border border-red-500/40 shadow-lg shadow-red-500/20",
+  "bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-lg shadow-teal-500/20"
+];
+function getRandomColorForNiche(niche: string) {
+  if (!niche) return NICHE_COLOR_CLASSES[0];
+  let hash = 0;
+  for (let i = 0; i < niche.length; i++) {
+    hash = niche.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % NICHE_COLOR_CLASSES.length;
+  return NICHE_COLOR_CLASSES[index];
+}
   return (
     <ScrollReveal direction="up">
       <div ref={containerRef} className="w-full px-4" style={{ minHeight: "100vh" }}>
@@ -97,7 +150,7 @@ export function EnhancedVideoLibrary({
         >
           {displayedVideos.map((video, index) => {
             if (!video?.id) return null
-            const performance = getPerformanceLevel(video)
+            const {level,style,badge} = getEngagementPerformance(video)
             const isHovered = hoveredVideo === String(video.id)
 
             return (
@@ -109,9 +162,9 @@ export function EnhancedVideoLibrary({
                     onMouseEnter={() => setHoveredVideo(String(video.id))}
                     onMouseLeave={() => setHoveredVideo(null)}
                   >
-                    <CardContent className="p-0 flex-1 flex flex-col">
-                      <div className="relative aspect-[3/4] bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden w-full min-h-[180px]">
-                        <VideoPlayer src={video.thumbnail || ""} className="absolute inset-0 w-full h-full" />
+                    <CardContent className="p-0 flex-1 flex flex-col h-full">
+                      <div className="relative aspect-[3/4] h-full bg-gradient-to-br from-gray-700 to-gray-800 rounded-t-lg overflow-hidden w-full min-h-[180px]">
+                        <VideoPlayer src={video.thumbnail || ""} videoId={String(video.id)} priority={level === "high" ? "high" : "medium"} className="absolute inset-0 w-full h-full" />
 
                         <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           <VideoCollectionManager
@@ -130,19 +183,23 @@ export function EnhancedVideoLibrary({
                             </Button>
                           </VideoCollectionManager>
                         </div>
-
-                        <div className="absolute bottom-3 left-3 z-20">
+                        {/* Performance + Niche Badges */}
+                        <div className="absolute bottom-3 left-3 z-20 flex gap-2">
+                          {/* Performance */}
                           <div
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
-                              performance === "high"
-                                ? "bg-emerald-500/20 text-emerald-300"
-                                : performance === "medium"
-                                ? "bg-amber-500/20 text-amber-300"
-                                : "bg-rose-500/20 text-rose-300"
-                            }`}
-                          >
-                            {performance.toUpperCase()}
-                          </div>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold ${style}`}
+            >
+              {level.toUpperCase()}
+            </div>
+
+                          {/* Niche */}
+                          <div
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm transition-all duration-300 ${
+                            getRandomColorForNiche(video.niche || "")
+                          }`}
+                        >
+                          {video.niche || "Uncategorized"}
+                        </div>
                         </div>
 
                         <div
@@ -156,7 +213,27 @@ export function EnhancedVideoLibrary({
                         <h4 className="font-semibold text-white text-sm line-clamp-2 leading-relaxed mb-3">
                           {video.title || "Untitled Video"}
                         </h4>
-
+                        <div className="flex items-center justify-between mb-3">
+                            <a
+                              href={`https://www.tiktok.com/@${video.author_username || ""}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-sm font-semibold bg-gradient-to-r from-pink-400 to-white bg-clip-text text-transparent hover:underline"
+                            >
+                              {video.author_name || "Unknown Author"}
+                            </a>
+                            <a
+                              href={`https://www.tiktok.com/@${video.author_username || ""}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-sm font-semibold bg-gradient-to-r from-pink-400 to-white bg-clip-text text-transparent hover:underline"
+                            >
+                              @{video.author_username || "Unknown Author"}
+                            </a>
+                          </div>
+                       {badge}
                         <div className="grid grid-cols-2 gap-2 text-xs mb-4">
                           <div className="flex items-center gap-2 text-gray-400">
                             <Eye className="w-3.5 h-3.5" />
